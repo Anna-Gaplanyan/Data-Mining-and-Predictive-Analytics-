@@ -1,0 +1,1490 @@
+---
+title: "Data Mining and Predictive Analytics group project"
+author: "Mane Sahakyan, Anna Gaplanyan, Nare Sedrakyan"
+date: '08, May, 2021'
+institute: "American University of Armenia" 
+instructor: "Habet Madoyan"
+teaching assistant: "Anna Drnoian"
+output: 
+  pdf_document: 
+    toc: yes
+    highlight: espresso
+    fig_caption: TRUE
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FALSE)
+options(tinytex.verbose = TRUE)
+options(scipen = 999)
+library(plyr)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(tidyverse)
+library(spacetime)
+library(factoextra)
+library(clValid)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(caret)
+library(tm)
+library(randomForest)
+library(detectseparation)
+library(brglm2)
+library(class)
+library(ROCR)
+library(pROC)
+library(psych)
+library(FNN)
+library(reshape2)
+library(lubridate)
+library(GGally)
+library(ggcorrplot)
+library(ggExtra)
+```
+
+
+
+## Overview
+
+The usage of data mining in education, especially in the online learning aspect, has become a necessity. The database gained from the elearning environment(Moodle system) needs to be processed, and we need data mining tools in order to get insights into the data. Our project aims to represent the whole phases of processing the e-learning dataset and putting into use data mining techniques such as visualization, clustering, and classification for the Moodle log records. These techniques will help predict students' academic performance, group students based on their similar features that will be formed by processing the data. The results of our project can be used by universities that use Moodle learning management system to create a new education system that will inform students that they are at risk of failing. Secondly, universities may predict the low-performing students and sign learning contracts with them. That contract allows students to attend more office hours, prioritize homework and reading, and show more improvement on exam performance. "These learning contracts are low cost, lof effort tool to increase student commitment, boost academic performance, and encourage self-direction (Frank & Scharff, 2013). 
+
+## Literature review
+In order to do deep level analyzes and exploring meaningful insights, we have done research by reading different articles regarding the same topic.
+**Visualization**
+During the project, we use the R programming language in order to create different graphical representations of the data. Additionally, there is a graphical interactive student monitoring and tracking system tool (GISMO) that extracts tracking data from Moodle and generates graphical representations that can be explored by course instructors to examine various aspects of distance classes (Cristobal Romero & Ventura, 2007).
+**Cluster Analysis**
+The clustering method aims to assort together the items that display similarities in certain aspects. In clustering analyses, distinct metrics are usually utilized to identify things that have similar attributes (Cristobal Romero & Ventura, 2007). The critical factor of clustering analysis is deciding how many separate clusters will be connected. In a data that is grouped into an accurate number of clusters, the items in the same cluster are expected to have more similarities with those in the same cluster and fewer similarities with those in other clusters (Ryan Baker & Siemens, 2014). Since, in our case, it is an educational environment, we used the clustering method for grouping students based on their features such as the number of different days that the student logs in Moodle, the number of views of the status of a submission, views of quiz attempt, views of feedback, etc. We mainly have chosen the activities for modeling based on the number of students who did these actions. For **Clustering analysis**, we used the tool K -Means algorithm based on the specific conditions.
+**Classification analysis**
+The purpose of classification analysis is to predict the value of the target feature on a categorical level by using another group of features(AKCAPINAR & BAYAZIT, 2019, p. 410).
+In supervised learning, random forest (RF) is one of the statistical learning theories, and the approach is applied to make predictions with multiple decision trees and uses voting to obtain the final prediction results(Hung et al., 2020, p.4). For the project, we use **Random forest**, **Support Vector Machine**, and **Logistic regression** to predict the students who are low performers and the students who are high performers based on their features. Besides, we used **KNN regression** to make predictions of students' grades.
+
+
+
+## Research Methodology
+For our project, we used Moodle data system of the American University of Armenia. From this dataset, we select only undergraduate quantitive courses data. After processing data (removing duplications, missing values and intersecting the user ids with students user ids, defining the number of different days that the student log in Moodle, and selecting number of views of submission status, number of times that the submission is updated, number of views of submission form, number of times that the submission is created,  number of views of quiz attempts,  number of views of quiz attempts' summaries, number of times that the quiz attempt is submitted, number of times that the quiz attempt is started, number of times that the quiz attempt is reviewed, number of views of grade user report,  number of views of feedbacks,  number of views of discussions, number of views of a course, number of times that the course activity completion is updated, number of times that the submission is submitted, and number of times that the file is uploaded) we formed the data for data mining analysis. 
+In the **visualization part** we used a bar plot to demonstrate the frequencies of activities done by students. wE used **ggcorrplot** function in order to represent the correlation coefficients between grade and the remaining variables in our data. Additionally, **ggpairs** function helped us determine whether there is a linear relationship between students' grades and the rest columns of our data.
+For **Clustering Analysis**, we use the **K-means** algorithm as our data is unlabeled. The aim of using the K-means algorithm is to group students in different clusters based on their features.  We used the **fviz_nbclust()** function from **factoextra** package in order to create **Elbow curve** and to be able to define the optimal value of **K**, which stands for the number of clusters.
+For **Classification analysis** we divided students into two groups, low performers(Score<=50) and high performers (Score > 50). The division process is carried out based on normalized student scores. Percentile rank normalization is used for normalization (AKCAPINAR & BAYAZIT, 2019, p. 410). we used **Logistic regression**, **Random Forest**, and **Support Vector Machine** methods to predict the students who are low performers and the high performers' students based on their features. Then we compare the accuracy of the methods and recommend the method with the highest accuracy.
+Since all the initial variables are numeric, we used **KNN regression** to be suitable for the numeric dataset. **KNN regression** was applied for the purpose of predicting the grades of the students.
+
+
+
+
+```{r}
+c1q2<- read_xlsx("Course1_Undergraduate_Quantitative_02.xlsx")
+```
+
+```{r}
+c1q2$date<- substr(as.character(c1q2$Time),1,regexpr(",",as.character(c1q2$Time))-1)
+c1q2$date<- as.POSIXct(c1q2$date, format="%d/%m/%y")
+c1q2$month<- as.factor(month(c1q2$date))
+c1q2$weekday<- as.factor(lubridate::wday(c1q2$date, label = TRUE))
+```
+
+```{r}
+c1q2_grade<-read_xlsx("Course1_Undergraduate_Quantitative_02.xlsx", sheet = "Grades")
+```
+
+```{r}
+c1q2_grade<- as.data.frame(c1q2_grade)
+```
+
+
+
+```{r}
+Grades<-replace(c1q2_grade$Grades,c1q2_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c1q2_grade$Grades<- Grades
+```
+
+```{r}
+c1q2_grade<- na.omit(c1q2_grade)
+```
+
+
+```{r}
+c1q2_grade<- c1q2_grade %>% rename(userid = `Moodel_UserID`)
+```
+
+
+
+```{r}
+c1q3<- read_xlsx("Course1_Undergraduate_Quantitative_03.xlsx")
+```
+
+```{r}
+c1q3$date<- substr(as.character(c1q3$Time),1,regexpr(",",as.character(c1q3$Time))-1)
+c1q3$date<- as.POSIXct(c1q3$date, format="%d/%m/%y")
+c1q3$month<- as.factor(month(c1q3$date))
+c1q3$weekday<- as.factor(lubridate::wday(c1q3$date, label = TRUE))
+```
+
+```{r}
+c1q3_grade<-read_xlsx("Course1_Undergraduate_Quantitative_03.xlsx", sheet = "Grade")
+```
+
+
+```{r}
+c1q3_grade<- as.data.frame(c1q3_grade)
+```
+
+
+```{r}
+Grades<-replace(c1q3_grade$Grades,c1q3_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c1q3_grade$Grades<- Grades
+```
+
+```{r}
+c1q3_grade<- na.omit(c1q3_grade)
+```
+
+```{r}
+c1q3_grade<- c1q3_grade %>% rename(userid = `Moodle_Userid`)
+```
+
+
+
+```{r}
+c1q4<- read_xlsx("Course1_Undergraduate_Quantitative_04.xlsx")
+```
+
+```{r}
+c1q4$date<- substr(as.character(c1q4$Time),1,regexpr(",",as.character(c1q4$Time))-1)
+c1q4$date<- as.POSIXct(c1q4$date, format="%d/%m/%y")
+c1q4$month<- as.factor(month(c1q4$date))
+c1q4$weekday<- as.factor(lubridate::wday(c1q4$date, label = TRUE))
+```
+
+```{r}
+c1q4_grade<-read_xlsx("Course1_Undergraduate_Quantitative_04.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c1q4_grade<- as.data.frame(c1q4_grade)
+```
+
+
+```{r}
+Grades<-replace(c1q4_grade$Grades,c1q4_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c1q4_grade$Grades<- Grades
+```
+
+```{r}
+c1q4_grade<- na.omit(c1q4_grade)
+```
+
+
+```{r}
+c1q4_grade<- c1q4_grade %>% rename(userid = `Moodle_UserID`)
+```
+
+
+
+```{r}
+c2q1<- read_xlsx("Course2_Undergraduate_Quantitative_01.xlsx")
+```
+
+```{r}
+c2q1$date<- substr(as.character(c2q1$Time),1,regexpr(",",as.character(c2q1$Time))-1)
+c2q1$date<- as.POSIXct(c2q1$date, format="%d/%m/%y")
+c2q1$month<- as.factor(month(c2q1$date))
+c2q1$weekday<- as.factor(lubridate::wday(c2q1$date, label = TRUE))
+```
+
+```{r}
+c2q1_grade<-read_xlsx("Course2_Undergraduate_Quantitative_01.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c2q1_grade<- as.data.frame(c2q1_grade)
+```
+
+
+```{r}
+Grades<-replace(c2q1_grade$Grades,c2q1_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c2q1_grade$Grades<- Grades
+```
+
+```{r}
+c2q1_grade<- na.omit(c2q1_grade)
+```
+
+
+```{r}
+c2q1_grade<- c2q1_grade %>% rename(userid = `Moodle_UserID`)
+```
+
+
+```{r}
+c2q2<- read_xlsx("Course2_Undergraduate_Quantitative_02.xlsx")
+```
+
+```{r}
+c2q2$date<- substr(as.character(c2q2$Time),1,regexpr(",",as.character(c2q2$Time))-1)
+c2q2$date<- as.POSIXct(c2q2$date, format="%d/%m/%y")
+c2q2$month<- as.factor(month(c2q2$date))
+c2q2$weekday<- as.factor(lubridate::wday(c2q2$date, label = TRUE))
+```
+
+```{r}
+c2q2_grade<-read_xlsx("Course2_Undergraduate_Quantitative_02.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c2q2_grade<- as.data.frame(c2q2_grade)
+```
+
+
+```{r}
+Grades<-replace(c2q2_grade$Grades,c2q2_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c2q2_grade$Grades<- Grades
+```
+
+```{r}
+c2q2_grade<- na.omit(c2q2_grade)
+```
+
+
+```{r}
+c2q2_grade<- c2q2_grade %>% rename(userid = `Moodle_user_id`)
+```
+
+
+```{r}
+c2q3<- read_xlsx("Course2_Undergraduate_Quantitative_03.xlsx")
+```
+
+```{r}
+c2q3$date<- substr(as.character(c2q3$Time),1,regexpr(",",as.character(c2q3$Time))-1)
+c2q3$date<- as.POSIXct(c2q3$date, format="%d/%m/%y")
+c2q3$month<- as.factor(month(c2q3$date))
+c2q3$weekday<- as.factor(lubridate::wday(c2q3$date, label = TRUE))
+```
+
+```{r}
+c2q3_grade<-read_xlsx("Course2_Undergraduate_Quantitative_03.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c2q3_grade<- as.data.frame(c2q3_grade)
+```
+
+
+```{r}
+Grades<-replace(c2q3_grade$Grades,c2q3_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c2q3_grade$Grades<- Grades
+```
+
+```{r}
+c2q3_grade<- na.omit(c2q3_grade)
+```
+
+
+```{r}
+c2q3_grade<- c2q3_grade %>% rename(userid = `Moodle_UserID`)
+```
+
+
+
+```{r}
+c2q4<- read_xlsx("Course2_Undergraduate_Quantitative_04.xlsx")
+```
+
+```{r}
+c2q4$date<- substr(as.character(c2q4$Time),1,regexpr(",",as.character(c2q4$Time))-1)
+c2q4$date<- as.POSIXct(c2q4$date, format="%d/%m/%y")
+c2q4$month<- as.factor(month(c2q4$date))
+c2q4$weekday<- as.factor(lubridate::wday(c2q4$date, label = TRUE))
+```
+
+```{r}
+c2q4_grade<-read_xlsx("Course2_Undergraduate_Quantitative_04.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c2q4_grade<- as.data.frame(c2q4_grade)
+```
+
+
+```{r}
+Grades<-replace(c2q4_grade$Grades,c2q4_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c2q4_grade$Grades<- Grades
+```
+
+```{r}
+c2q4_grade<- na.omit(c2q4_grade)
+```
+
+
+```{r}
+c2q4_grade<- c2q4_grade %>% rename(userid = `Moodle_UserID`)
+```
+
+
+```{r}
+c3q<- read_xlsx("Course3_Undergraduate_Quantitative.xlsx")
+```
+
+```{r}
+c3q$date<- substr(as.character(c3q$Time),1,regexpr(",",as.character(c3q$Time))-1)
+c3q$date<- as.POSIXct(c3q$date, format="%d/%m/%y")
+c3q$month<- as.factor(month(c3q$date))
+c3q$weekday<- as.factor(lubridate::wday(c3q$date, label = TRUE))
+```
+
+```{r}
+c3q_grade<-read_xlsx("Course3_Undergraduate_Quantitative.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c3q_grade<- as.data.frame(c3q_grade)
+```
+
+
+```{r}
+Grades<-replace(c3q_grade$Grades,c3q_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c3q_grade$Grades<- Grades
+```
+
+```{r}
+c3q_grade<- na.omit(c3q_grade)
+```
+
+
+```{r}
+c3q_grade<- c3q_grade %>% rename(userid = `Moodle_UserID`)
+```
+
+
+
+```{r}
+c5q<- read_xlsx("Course5_Undergraduate_Quantitative.xlsx")
+```
+
+
+```{r}
+c5q$date<- substr(as.character(c5q$Time),1,regexpr(",",as.character(c5q$Time))-1)
+c5q$date<- as.POSIXct(c5q$date, format="%d/%m/%y")
+c5q$month<- as.factor(month(c5q$date))
+c5q$weekday<- as.factor(lubridate::wday(c5q$date, label = TRUE))
+```
+
+```{r}
+c5q_grade<-read_xlsx("Course5_Undergraduate_Quantitative.xlsx", sheet = "Grades")
+```
+
+
+```{r}
+c5q_grade<- as.data.frame(c5q_grade)
+```
+
+
+```{r}
+Grades<-replace(c5q_grade$Grades,c5q_grade$Grades == "NULL",NA)
+```
+
+```{r}
+c5q_grade$Grades<- Grades
+```
+
+```{r}
+c5q_grade<- na.omit(c5q_grade)
+```
+
+
+```{r}
+c5q_grade<- c5q_grade %>% rename(userid = `Moodle_UserID`)
+```
+
+
+
+```{r}
+quant_data<- bind_rows(c1q2, c1q3)
+```
+
+```{r}
+quant_data<- bind_rows(quant_data, c1q4)
+```
+
+```{r}
+quant_data<- bind_rows(quant_data, c2q1)
+```
+
+```{r}
+quant_data<- bind_rows(quant_data, c2q2)
+```
+
+```{r}
+quant_data<- bind_rows(quant_data, c2q3)
+```
+
+
+```{r}
+quant_data<- bind_rows(quant_data, c2q4)
+```
+
+```{r}
+quant_data<- bind_rows(quant_data, c3q)
+```
+
+```{r}
+quant_data<- bind_rows(quant_data, c5q)
+```
+
+
+```{r}
+quant_grades<- bind_rows(c1q2_grade, c1q3_grade)
+```
+
+```{r}
+quant_grades<- bind_rows(quant_grades, c1q4_grade)
+```
+
+```{r}
+quant_grades<- bind_rows(quant_grades, c2q1_grade)
+```
+
+```{r}
+quant_grades<- bind_rows(quant_grades, c2q2_grade)
+```
+```{r}
+quant_grades<- bind_rows(quant_grades, c2q3_grade)
+```
+```{r}
+quant_grades<- bind_rows(quant_grades, c2q4_grade)
+```
+
+```{r}
+quant_grades<- bind_rows(quant_grades, c3q_grade)
+```
+
+```{r}
+quant_grades<- bind_rows(quant_grades, c5q_grade)
+```
+
+
+```{r}
+quant_data1<- substr(quant_data$Description, 19, 22)
+```
+
+```{r}
+quant_data$userid<-quant_data1
+```
+
+```{r}
+quant_data$userid<- str_trim(quant_data$userid)
+```
+
+
+```{r}
+quant_data$userid<- gsub("'", " ", quant_data$userid)
+```
+
+```{r}
+quant_data$userid<- as.numeric(str_extract(quant_data$userid, "[0-9]+"))
+```
+
+
+```{r}
+combined<- inner_join(quant_data, quant_grades, by = "userid")
+```
+
+
+
+```{r}
+combined<-distinct(combined)
+```
+
+```{r}
+user_grade<- distinct(combined[, c(10,11)])
+```
+
+
+```{r}
+session<-combined %>% dplyr::group_by(userid) %>% dplyr::summarise(session = length(Time))
+```
+
+```{r}
+session<- na.omit(session)
+```
+
+```{r}
+dat_comb<- merge(session, user_grade, by = "userid", all = TRUE)
+```
+
+
+
+```{r}
+numOfDifUsedDay<- ddply(combined, .(userid), summarise, nuDays = length(unique(date)))
+```
+
+```{r}
+dat_comb<- merge(numOfDifUsedDay, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+combined$`Event name`<- as.factor(combined$`Event name`)
+```
+
+```{r}
+file_uploaded<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "A file has been uploaded.")
+```
+```{r}
+file_uploaded<- file_uploaded %>% dplyr::group_by(userid) %>% dplyr::summarise(file_uploaded = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(file_uploaded, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+submission_submitted<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "A submission has been submitted.")
+```
+
+```{r}
+submission_submitted<- submission_submitted %>% dplyr::group_by(userid) %>% dplyr::summarise(submission_submitted = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(submission_submitted, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+submission_downloaded<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "All the submissions are being downloaded.")
+```
+
+```{r}
+submission_downloaded<- submission_downloaded %>% dplyr::group_by(userid) %>% dplyr::summarise(submission_downloaded = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(submission_downloaded, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+badge_list<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Badge listing viewed")
+```
+
+```{r}
+badge_list<- badge_list %>% dplyr::group_by(userid) %>% dplyr::summarise(badge_list = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(badge_list, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+choice_answer_added<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Choice answer added")
+```
+
+```{r}
+choice_answer_added<- choice_answer_added %>% dplyr::group_by(userid) %>% dplyr::summarise(choice_answer_added = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(choice_answer_added, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+choice_report_viewed<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Choice report viewed")
+```
+
+```{r}
+choice_report_viewed<- choice_report_viewed %>% dplyr::group_by(userid) %>% dplyr::summarise(choice_report_viewed = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(choice_report_viewed, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+course_act_comp_updat<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Course activity completion updated")
+```
+
+```{r}
+course_act_comp_updat<- course_act_comp_updat %>% dplyr::group_by(userid) %>% dplyr::summarise(course_act_comp_updat = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(course_act_comp_updat, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+course_user_rep_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Course user report viewed")
+```
+
+```{r}
+course_user_rep_view<- course_user_rep_view %>% dplyr::group_by(userid) %>% dplyr::summarise(course_user_rep_view = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(course_user_rep_view, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+course_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Course viewed")
+```
+
+```{r}
+course_view<- course_view %>% dplyr::group_by(userid) %>% dplyr::summarise(course_view = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(course_view, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+disc_viewed<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Discussion viewed")
+```
+
+```{r}
+disc_viewed<- disc_viewed %>% dplyr::group_by(userid) %>% dplyr::summarise(disc_viewed = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(disc_viewed, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+feedback_viewed<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Feedback viewed")
+```
+
+```{r}
+feedback_viewed<- feedback_viewed %>% dplyr::group_by(userid) %>% dplyr::summarise(feedback_viewed = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(feedback_viewed, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+grade_user_rep_viewed<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Grade user report viewed")
+```
+
+```{r}
+grade_user_rep_viewed<- grade_user_rep_viewed %>% dplyr::group_by(userid) %>% dplyr::summarise(grade_user_rep_viewed = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(grade_user_rep_viewed, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+quiz_attempt_rev<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Quiz attempt reviewed")
+```
+
+```{r}
+quiz_attempt_rev<- quiz_attempt_rev %>% dplyr::group_by(userid) %>% dplyr::summarise(quiz_attempt_rev = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(quiz_attempt_rev, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+quiz_attempt_star<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Quiz attempt started")
+```
+
+```{r}
+quiz_attempt_star<- quiz_attempt_star %>% dplyr::group_by(userid) %>% dplyr::summarise(quiz_attempt_star = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(quiz_attempt_star, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+quiz_attempt_sub<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Quiz attempt submitted")
+```
+
+```{r}
+quiz_attempt_sub<- quiz_attempt_sub %>% dplyr::group_by(userid) %>% dplyr::summarise(quiz_attempt_sub = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(quiz_attempt_sub, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+quiz_attempt_sum_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Quiz attempt summary viewed")
+```
+
+```{r}
+quiz_attempt_sum_view<- quiz_attempt_sum_view %>% dplyr::group_by(userid) %>% dplyr::summarise(quiz_attempt_sum_view = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(quiz_attempt_sum_view, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+quiz_attempt_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Quiz attempt viewed")
+```
+
+```{r}
+quiz_attempt_view<- quiz_attempt_view %>% dplyr::group_by(userid) %>% dplyr::summarise(quiz_attempt_view = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(quiz_attempt_view, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+sessions_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Sessions viewed")
+```
+
+```{r}
+sessions_view<- sessions_view %>% dplyr::group_by(userid) %>% dplyr::summarise(sessions_view = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(sessions_view, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+sub_conf_form_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Submission confirmation form viewed.")
+```
+
+```{r}
+sub_conf_form_view<- sub_conf_form_view %>% dplyr::group_by(userid) %>% dplyr::summarise(sub_conf_form_view = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(sub_conf_form_view, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+submission_created<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Submission created.")
+```
+
+```{r}
+submission_created<- submission_created %>% dplyr::group_by(userid) %>% dplyr::summarise(submission_created = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(submission_created, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+sub_form_view<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Submission form viewed.")
+```
+
+```{r}
+sub_form_view<- sub_form_view %>% dplyr::group_by(userid) %>% dplyr::summarise(sub_form_view = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(sub_form_view, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+submission_updated<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Submission updated.")
+```
+
+```{r}
+submission_updated<- submission_updated %>% dplyr::group_by(userid) %>% dplyr::summarise(submission_updated = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(submission_updated, dat_comb, by = "userid", all = TRUE)
+```
+
+
+```{r}
+status_of_subm_viewed<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "The status of the submission has been viewed.")
+```
+
+```{r}
+status_of_subm_viewed<- status_of_subm_viewed %>% dplyr::group_by(userid) %>% dplyr::summarise(status_of_subm_viewed = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(status_of_subm_viewed, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+user_accept_statement_subm<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "The user has accepted the statement of the submission.")
+```
+
+```{r}
+user_accept_statement_subm<- user_accept_statement_subm %>% dplyr::group_by(userid) %>% dplyr::summarise(user_accept_statement_subm = length(`Event name`))
+```
+
+
+```{r}
+dat_comb<- merge(user_accept_statement_subm, dat_comb, by = "userid", all = TRUE)
+```
+
+```{r}
+zip_downloaded<- combined %>% dplyr::select(c(userid, `Event name`)) %>% dplyr::filter(`Event name` == "Zip archive of folder downloaded")
+```
+
+```{r}
+zip_downloaded<- zip_downloaded %>% dplyr::group_by(userid) %>% dplyr::summarise(zip_downloaded = length(`Event name`))
+```
+
+```{r}
+dat_comb<- merge(zip_downloaded, dat_comb, by = "userid", all = TRUE)
+```
+
+
+
+```{r}
+data_for_modeling<- dat_comb %>% select(c("userid", "Grades", "nuDays", "status_of_subm_viewed", "submission_updated", "sub_form_view", "submission_created", "quiz_attempt_view", "quiz_attempt_sum_view", "quiz_attempt_sub", "quiz_attempt_star", "quiz_attempt_rev", "grade_user_rep_viewed", "feedback_viewed", "disc_viewed", "course_view", "course_act_comp_updat", "submission_submitted", "file_uploaded"))
+```
+
+
+```{r}
+data_for_modeling<- na.omit(data_for_modeling)
+```
+
+```{r}
+data_for_modeling$Grades<- as.numeric(data_for_modeling$Grades)
+```
+
+
+\newpage
+## Analysis
+
+
+**Visualizations**
+
+```{r}
+resh_data<- melt(data_for_modeling, id.vars = c("userid", "Grades", "nuDays"), measure.vars = c("status_of_subm_viewed", "submission_updated", "sub_form_view", "submission_created", "quiz_attempt_view", "quiz_attempt_sum_view", "quiz_attempt_sub", "quiz_attempt_star", "quiz_attempt_rev", "grade_user_rep_viewed", "feedback_viewed", "disc_viewed", "course_view", "course_act_comp_updat", "submission_submitted", "file_uploaded"), variable.name = "Activity", value.name = "frequency")
+```
+
+
+```{r}
+levels(resh_data$Activity)<-c("view of status of submission", "submission updated", "view of submission form", "Submission created", "view of quiz attempt", "view quiz attempt summary", "quiz attempt submitted","quiz attempt started", "quiz attempt reviewed", "view of grade user report", "view of feedback", "view of discussion", "view of course", "course activity completion updated", "submission submitted", "file uploaded")
+```
+
+```{r,fig.cap="Bar plot", fig.align='center', fig.height=4}
+ggplot(resh_data, aes(x= Activity, y= frequency))+geom_bar(stat = "identity", color = "blue") + labs(x = "", y = "", title ="Frequency of each activity") +
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+```
+According to the bar plot, the three most frequent activities were the view of course, the view of status of the submission, and the view of the quiz attempt. 
+
+```{r}
+data_for_corr_graph<- data_for_modeling
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`Number of different days` = `nuDays`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of status of submission` = `status_of_subm_viewed`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`submission updated` = `submission_updated`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of submission form` = `sub_form_view`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`Submission created` = `submission_created`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of quiz attempt` = `quiz_attempt_view`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view quiz attempt summary` = `quiz_attempt_sum_view`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`quiz attempt submitted` = `quiz_attempt_sub`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`quiz attempt started` = `quiz_attempt_star`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`quiz attempt reviewed` = `quiz_attempt_rev`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of grade user report` = `grade_user_rep_viewed`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of feedback` = `feedback_viewed`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of discussion` = `disc_viewed`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`view of course` = `course_view`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`course activity completion updated` = `course_act_comp_updat`)
+```
+
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`submission submitted` = `submission_submitted`)
+```
+
+```{r}
+data_for_corr_graph<- data_for_corr_graph %>% rename(`file uploaded` = `file_uploaded`)
+```
+
+**Correlation coefficient** is a measure of the strength of the relationship between two variables.
+We create a correlation matrix to calculate and visualize correlation among grades, the various activities, and the number of different days that the student logged on Moodle.
+\newpage
+```{r,fig.cap="Correlation matrix", fig.width = 15, fig.height=15, fig.align='center', out.height="90%", out.width="90%"}
+data_corr <- round(cor(data_for_corr_graph[,2:19], use = "pairwise.complete.obs"),2)
+ggcorrplot(data_corr, type = 'lower', lab = TRUE, hc.order = TRUE) +
+    labs(title = "Correlation matrix")+
+scale_fill_gradient2(low = "green", high = "red",
+mid = "white", midpoint = 0, limit = c(-1,1), name="Correlation")
+```
+
+As we can see from the plot, the correlation coefficient between grade and any other variable is not strong, as the correlation coefficients are less than 0.5. 
+We use the **ggpairs** function in order to demonstrate the distribution of grades, number of times that submission is updated, number of times that a quiz attempt is viewed, number of times that status of submission is viewed, number of times that feedback is viewed, number of times that a submission form is viewed, number of times that a file is uploaded, number of times that submission is created, number of times that submission is submitted, and number of times that a quiz attempt summary is viewed. We choose these variables as there is a correlation between them and students' grades.
+\newpage
+```{r,fig.cap="Correlation matrix", fig.width=20, fig.height=20, fig.align='center', out.height="80%", out.width="80%"}
+ggpairs(data_for_corr_graph, columns = c(2, 4, 5, 6, 7, 8, 9, 14, 18, 19), progress = FALSE)+ labs(title = "Correlation matrix")
+```
+
+According to the **Correlation matrix** there is no linear relationship among students' grades and number of times that submission is updated, number of times that a quiz attempt is viewed, number of times that status of submission is viewed, number of times that feedback is viewed, number of times that a submission form is viewed, number of times that a file is uploaded, number of times that submission is created, number of times that submission is submitted, and number of times that a quiz attempt summary is viewed.
+
+\newpage
+## K-Means Algorithm
+
+**K-Means algorithm** is an unsupervised cluster algorithm used to minimize cluster performance index, square error, and error criterion(Li, Wu, 2012). In the K-means algorithm, we take into consideration **Total sum of squares**, **Between groups sum of squares**, **Within group sum of squares**. **k** is the number of pre-defined clusters. In order to find the optimal value of **k**, we use the **Elbow method**. We use the **summary** function for figuring out whether there is a need for normalization. 
+
+```{r}
+summary(data_for_modeling[, 3:19])
+```
+\newpage
+The range of the variables varies on a large scale. Hence, we normalize the range of the variables by using **Z-score normalization**. **Z-score** represents the distance of the point from the mean measured in standard deviation. The **mean** is equal to zero, and **standard deviation** is equal to one. The normalization is done in order to make the algorithm independent from the random variable unit.
+```{r}
+scaled_data<-as.data.frame(scale(data_for_modeling[, 3:19]))
+```
+
+We use **fviz_nbclust()** function from **factoextra** package in order to create **Elbow curve**.
+
+```{r,fig.cap="Elbow curve", fig.align='center', fig.height=5, out.height="60%", out.width="60%"}
+set.seed(1)
+fviz_nbclust(scaled_data, kmeans, method = "wss")
+```
+
+According to the graph, we can state that by increasing the number of k, the total within sum of squares decreases. However, we need to define the optimal number of k for the k-means algorithm. This is the number for which the decrease in **WSS** will be tiny as we increase the number of k. Therefore, in this case, the optimal value for **k** is **three**.  
+\newpage
+```{r}
+set.seed(1)
+km3 <- kmeans(scaled_data,3)
+```
+
+```{r}
+scaled_data$cl<-km3$cluster
+scaled_data$userid<- scaled_data$userid
+```
+
+
+The evaluation of the model is done using **internal measures** such as **Silhouette coefficient**, **Dunn index**, **Connectivity**. 
+
+```{r}
+set.seed(1)
+internal_measures <- clValid(scaled_data, nClust = 3, clMethods = "kmeans",
+validation = "internal")
+summary(internal_measures)
+```
+
+
+The **Silhouette coefficient** is **0.2417**, and we can conclude that the clustering is not so good.  The **Dunn index** is **0.1491**. This means that **min.separation** is lower and **max.diameter** is higher. As the **min.separation** is lower, between cluster distance is lower. As the **max. diameter** is higher,  the within cluster distances are higher. **Connectivity** is **23.8933**, which means that not all the nearest neighbors are in the same cluster. So, the clustering is not so good.
+We also check what percent of the total variance in the data can be explained by the clusters dividing Between Groups Sum of Squares by Total Sum of Squares.
+```{r, eval=FALSE}
+km3$betweenss/km3$totss
+```
+**43.6** percent of the total variance in the data can be explained by the clusters dividing Between Groups Sum of Squares by Total Sum of Squares.
+```{r,fig.cap="Cluster plot", fig.align='center', fig.height=4, fig.width=5, out.height="50%", out.width="50%"}
+fviz_cluster(km3, data = scaled_data,
+             palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+```
+\newpage
+As we can see in cluster number 1, the spread of the points is less than the spread of cluster number 2 and 3.  This means that within group sum of squares for cluster number one is less than for cluster number 2 and 3.
+
+## Random forest
+
+
+**RF** is an ensemble learning method used for classification and regression. Developed by Breiman (2001), the method combines Breiman's bagging sampling approach (1996a) and the random selection of features, introduced independently by Ho (1995; 1998) and Amit and Geman (1997), in order to construct a collection of decision trees with a controlled variation. Using bagging, each decision tree in the ensemble is constructed using a sample with replacement from the training data (Fawagreh et al., 2014, p. 604).
+We used the **Random forest** algorithm to predict the students who are low performers and the high performers.  In the model, our dependent variable is grade, and independent variables are the number of times that a status of the submission is viewed, number of times that submission is created, number of times a quiz is submitted, number of times a grade user report is viewed, number of times a course is viewed, number of times a file is uploaded, number of times that submission is updated, number of times that a quiz attempt is viewed, number of times that a quiz attempt is started, number of times that feedback is viewed, number of times that a course activity completion is updated, number of different days that a student logs in to Moodle, number of times that a submission form is viewed, number of times that a quiz attempt summary is viewed, number of times that a quiz attempt is reviewed,  number of times that a discussion is viewed, and number of times that a submission has been submitted. 
+We divided our data set into training and testing sets by using 80/20 proportion. We did ten-fold cross-validation.
+
+```{r}
+classification_data<- data_for_modeling
+```
+
+
+```{r}
+classification_data$Grades<- ecdf(classification_data$Grades)(classification_data$Grades) * 100
+```
+
+
+
+```{r}
+quantGradeCategorized <- ifelse(classification_data$Grades > 50, "high_performer", 
+                          ifelse(classification_data$Grades <= 50, "low_performer", NA))
+```
+
+
+```{r}
+classification_data$Grades<- quantGradeCategorized
+```
+
+```{r}
+classification_data$Grades<- as.factor(classification_data$Grades)
+```
+
+```{r}
+set.seed(1)
+ctr <- trainControl(method="cv", number=10, classProbs=T, summaryFunction=twoClassSummary)
+```
+
+
+
+
+```{r}
+set.seed(1)
+(mod_caret <- train(Grades~`status_of_subm_viewed` + `submission_created` + `quiz_attempt_sub` + `grade_user_rep_viewed` + `course_view` + `file_uploaded` + `submission_updated` + `quiz_attempt_view` + `quiz_attempt_star` + `feedback_viewed` + `course_act_comp_updat` + `nuDays` + `sub_form_view` + `quiz_attempt_sum_view` + `quiz_attempt_rev` + `disc_viewed` + `submission_submitted`, data=classification_data, trControl=ctr, method="rf", metric = "ROC"))
+```
+\newpage
+**Mtry** shows how many variables are selected at random out of the set of independent variables to split the given node. The value of mtry is holding constant while growing the forest. In other words, the mtry hyperparameter will be the same for the whole process of generating the random forest. For every split in every tree, different random subsets of variables are used.
+```{r,fig.cap="Area under the curve", fig.align='center', fig.height=5, out.height="60%", out.width="60%"}
+plot(mod_caret, main = "Area under the curve ", xlab = "Number of predictors", ylab= "ROC")
+```
+
+
+According to the graph, we can state that the optimal value of mtry is equal to two.
+
+```{r}
+set.seed(1)
+ind <- createDataPartition(classification_data$Grades, p=0.8, list=F)
+data_train <- classification_data[ind,]
+data_test <- classification_data[-ind,]
+```
+
+
+
+We train a Random Forest model on the training data with 50 trees using the *randomForest* package.
+
+```{r}
+set.seed(1)
+model_random_forest <- randomForest(Grades~`status_of_subm_viewed` + `submission_created` + `quiz_attempt_sub` + `grade_user_rep_viewed` + `course_view` + `file_uploaded` + `submission_updated` + `quiz_attempt_view` + `quiz_attempt_star` + `feedback_viewed` + `course_act_comp_updat` + `nuDays` + `sub_form_view` + `quiz_attempt_sum_view` + `quiz_attempt_rev` + `disc_viewed` + `submission_submitted`, data = data_train, ntree=50, mtry = 2, do.trace=F, importance = TRUE)
+```
+
+
+```{r}
+error <- model_random_forest$err.rate
+```
+
+```{r}
+oob_err_rate <- error[nrow(error), "OOB"]
+```
+The **Out of Bag score** is **24.29** percent. This means that the model has ***75.71** percent out of sample accuracy for the training set.
+
+\newpage
+```{r,fig.cap="Importance of features", fig.height= 10, fig.width=15, fig.align='center', out.height="90%", out.width="90%"}
+varImpPlot(model_random_forest, main = "Importance of features", )
+```
+The **Mean Decrease Accuracy** plot expresses how much accuracy of the model losses by excluding each variable. The more the accuracy suffers, the more important the variable is for the successful classification. The higher the variable scores here, the more important it is for the model. The top 3 predictor variables for Mean Decrease Accuracy are the number of views of the status of a submission, the number of times the file is uploaded, and the number of times the submission is submitted. The **Mean Decrease in Gini coefficient** is a measure of how much each variable contributes to the homogeneity of the nodes and leaves in the resulting random forest. The higher the value of the mean decrease Gini score, the higher the importance of the variable in the model. The top 3 predictor variables for Mean Decrease in Gini coefficient are the number of times the submission is submitted, the number of views of the status of submission, and the number of views of the quiz attempt.
+
+\newpage
+
+```{r}
+pr <- predict(model_random_forest, data_test, type ="prob")
+```
+
+For evaluation of the model performance, we created a **Receiver Operator Characteristic(ROC) curve**.
+```{r,fig.cap="ROC curve", fig.align='center', fig.height=5, , out.height="60%", out.width="60%"}
+p_test <- prediction(pr[,2], data_test$Grades)
+perf <- performance(p_test, "tpr", "fpr")
+plot(perf, main = "ROC curve")
+```
+
+
+
+The curve is close to the **top-left corner** which indicates a better performance.
+
+```{r, eval=FALSE}
+performance(p_test, "auc")@y.values
+```
+The area under the curve is a single number between 0 and 1. The closer it is to 1, the better is going to be the model. In this case, AUC is  0.7301587, which means that there is a 73.02% chance that the model will distinguish between classes.
+
+```{r}
+p_class <- predict(model_random_forest, data_test, type ="class")
+```
+
+\newpage
+```{r, fig.align='center', fig.height=5, , out.height="60%", out.width="60%"}
+confusionMatrix(p_class, data_test$Grades, positive = "low_performer")
+```
+The **accuracy** of the model is equal to 0.6875. It shows that 68.75 percent of the predictions of the model are correct. This means that this model is quite a good model.
+The **sensitivity** of the model shows what percentage of actual low performer students are actually predicted to be low performers. It is equal to 0.5714, and it means that 57.14 percent of actual low performer students are actually predicted to be low performers.
+The **specificity** of the model shows what percentage of actual high performer students are actually predicted to be high performers. It is equal to 0.7778, and it means that 77.78 percent of actual high performer students are actually predicted to be high performers.
+**Positive Predictive Value** shows how many of the predicted low performer students are actually low performers. It shows what percentage of the predicted low performer students are actually low performers. It is equal to 0.6667, and it means that 66.67 percent of the predicted low performer students are actually low performers.
+**Negative Predictive Value** shows what percentage of the predicted high performer students are actually high performers. It is equal to 0.7000, which means that 70 percent of the predicted high performer students are actually high performers.
+
+
+
+\newpage
+## Logistic regression
+Generally, logistic regression is well suited for describing and testing hypotheses about relationships between a categorical outcome variable and one or more categorical or continuous predictor variables (Peng, 2002, p.4). 
+The model predicts the probability that the given case will belong to one of the classes, and based on that probability, the class label is assigned to the given case.
+In our project, students are divided into two groups, low performers(Score<=50) and high performers (Score > 50). The division process is carried out based on normalized student scores. Percentile rank normalization is used for normalization (AKCAPINAR & BAYAZIT, 2019, p. 410). We use **Logistic regression** analysis to predict the students who are low performers and the high performers. In the model, our dependent variable is grade, and independent variables are the number of times that a status of the submission is viewed, number of times that submission is created, number of times a quiz is submitted, number of times a grade user report is viewed, number of times a course is viewed, number of times a file is uploaded, number of times that submission is updated, number of times that a quiz attempt is viewed, number of times that a quiz attempt is started, number of times that feedback is viewed, number of times that a course activity completion is updated, number of different days that a student logs in to Moodle, number of times that a submission form is viewed, number of times that a quiz attempt summary is viewed, number of times that a quiz attempt is reviewed,  number of times that a discussion is viewed, and number of times that a submission has been submitted. 
+We divide our data set into training and testing sets by using 80/20 proportion.
+
+
+
+```{r}
+classification_data<- classification_data %>% rename(`Number of different days` = `nuDays`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of status of submission` = `status_of_subm_viewed`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`submission updated` = `submission_updated`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of submission form` = `sub_form_view`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`Submission created` = `submission_created`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of quiz attempt` = `quiz_attempt_view`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view quiz attempt summary` = `quiz_attempt_sum_view`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`quiz attempt submitted` = `quiz_attempt_sub`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`quiz attempt started` = `quiz_attempt_star`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`quiz attempt reviewed` = `quiz_attempt_rev`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of grade user report` = `grade_user_rep_viewed`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of feedback` = `feedback_viewed`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of discussion` = `disc_viewed`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`view of course` = `course_view`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`course activity completion updated` = `course_act_comp_updat`)
+```
+
+
+```{r}
+classification_data<- classification_data %>% rename(`submission submitted` = `submission_submitted`)
+```
+
+```{r}
+classification_data<- classification_data %>% rename(`file uploaded` = `file_uploaded`)
+```
+
+
+
+```{r}
+set.seed(1)
+log_part <- createDataPartition(classification_data$Grades, p = .8, list = FALSE)
+log_train <- classification_data[log_part,]
+log_test <- classification_data[-log_part,]
+```
+
+
+
+
+
+\newpage
+```{r}
+logistic_model<- glm(Grades~`view of status of submission` + `Submission created` + `quiz attempt submitted` + `view of grade user report` + `view of course` + `file uploaded` + `submission updated` + `view of quiz attempt` + `quiz attempt started` + `view of feedback` + `course activity completion updated` + `Number of different days` + `view of submission form` + `view quiz attempt summary` + `quiz attempt reviewed` + `view of discussion` + `submission submitted`, data=log_train, family = "binomial")
+summary(update(logistic_model, method = "brglm_fit"))
+```
+```{r, eval=FALSE}
+exp(-0.205779)
+```
+According to the model results, it can be stated that the number of different days that students log in Moodle is statistically significant as the p-value is less than alpha (0.05). The number of different days is significantly and negatively associated with the grade. By adding the number of different days that students log in Moodle by one day, the log odds of high performers will decrease by  -0.205779, holding other variables constant. The odds ratio for the number of different days that students log in to Moodle is 0.814013. This means that if we increase the number of different days that students log in Moodle by one day, the odds of being a high performer will decrease by 18.6 percent, holding other variables constant.
+We assess the **model's predictive power** based on a **Confusion Matrix**. For cutting the predicted probabilities, we define the **threshold** as **0.5** to get the class assignments. This means we classify every student with a predicted probability from the model greater than 0.5 as a **low performer**.
+
+```{r}
+probability <- predict(logistic_model, newdata=log_test, type="response")
+```
+
+```{r}
+predicted_class <- factor(ifelse(probability>0.5, "high_performer", "low_performer"))
+```
+
+```{r}
+predicted_class <- relevel(predicted_class, "low_performer")
+log_test$Grades<-relevel(log_test$Grades, "low_performer")
+```
+
+
+```{r}
+confusionMatrix(data=predicted_class, reference=log_test$Grades,
+positive="low_performer")
+```
+
+The **accuracy** of the model is 0.125. It shows that 12.5 percent of the predictions of the model are correct. This means that this model is worse than random guessing. This means that there is no linear relationship between the dependent variable(grade) and independent variables.
+The **sensitivity** of the model shows what percentage of actual low performer students are actually predicted to be low performers. It is equal to 0.2857, and it means that 28.57 percent of actual low performer students are actually predicted to be low performers.
+The **specificity** of the model shows what percentage of actual high performer students are actually predicted to be high performers. It is equal to 0.0000, and it means that 0 percent of actual high performer students are actually predicted to be high performers.
+**Positive Predictive Value** shows how many of the predicted low performer students are actually low performers. It shows what percentage of the predicted low performer students are actually low performers. It is equal to 0.1818, and it means that 18.18 percent of the predicted low performer students are actually low performers.
+**Negative Predictive Value** shows what percentage of the predicted high performer students are actually high performers. It is equal to 0.0000, which means that 0 percent of the predicted high performer students are actually high performers.
+
+```{r}
+pred_ob <- prediction(probability, log_test$Grades)
+```
+
+```{r}
+perform <- performance(pred_ob, "tpr", "fpr")
+```
+\newpage 
+We create a **Receiver Operator Characteristic(ROC) curve** to represent the classifier's diagnostic ability. 
+```{r,fig.cap="ROC curve", fig.align='center', fig.height=5,out.height="60%", out.width="60%"}
+plot(perform, main = "ROC Curve", colorize=T)
+```
+
+The curve is close to the **top-left corner** which indicates a better performance.
+```{r}
+ROC1 <- roc(log_test$Grades, probability)
+```
+
+```{r, eval=FALSE}
+auc(ROC1)
+```
+The area under the curve is a single number between 0 and 1. The closer it is to 1, the better is going to be the model. In this case, AUC is  0.8571, which means an 85.71% chance that the model will distinguish between classes. 
+
+
+\newpage
+## Support Vector Machine
+
+**Support vector machine** is a supervised machine learning classification algorithm that classifies data based on its features.
+It uses various dividing **hyperplanes** in order to divide the data into different classes.
+**Support vectors** are the points, which are very close to the **hyperplane**. 
+Using the support vectors, we can select the best line to divide the data.
+**Margin** is the distance between the support vectors and the **hyperplane**.
+The best line has the greatest margin distance between the support vectors.
+**D+** is the shortest distance to the closest positive point.
+**D-** is the shortest distance to the closest negative point.
+The sum of **D+** and **D-** is called the **distance margin**.
+If the margin between the support vectors is not the maximum, then the data can be **misclassified**.
+Let define **R** as the number of dimensions of the data. **SVM** uses the kernel to convert **R^2^** dimension to **R^3^** dimension.
+
+
+```{r}
+tr<- trainControl(method = "cv", number = 10)
+```
+
+
+```{r}
+set.seed(1)
+svm_part <- createDataPartition(classification_data$Grades, p = .8, list = FALSE)
+svm_train <- classification_data[svm_part,]
+svm_test <- classification_data[-svm_part,]
+```
+
+
+```{r}
+svm_model<- train(Grades~`view of status of submission` + `Submission created` + `quiz attempt submitted` + `view of grade user report` + `view of course` + `file uploaded` + `submission updated` + `view of quiz attempt` + `quiz attempt started` + `view of feedback` + `course activity completion updated` + `Number of different days` + `view of submission form` + `view quiz attempt summary` + `quiz attempt reviewed` + `view of discussion` + `submission submitted`, data = svm_train, method = "svmLinear", trControl = tr, preProcess = c("center", "scale"), tuneGrid = expand.grid(C = seq(0, 1, length = 20)))
+```
+
+```{r}
+svm_model
+```
+\newpage
+**The cost function** controls training errors and margins. If the value of parameter **c** is **large**, then the **margin** will be **narrow**, allowing less misclassifications. If the value of **c** is **small** then the **margin** will be **large**, allowing more misclassifications.
+
+```{r,fig.cap="Accuracy vs Cost", fig.align='center', fig.height=5, , out.height="60%", out.width="60%"}
+plot(svm_model, main=" Accuracy vs Cost", xlab = "Accuracy")
+```
+The **optimal value** of **c** is equal to 0.5263158.
+
+We evaluated the model performance by creating a **confusion matrix**. 
+
+```{r}
+prediction<- predict(svm_model, newdata = svm_test)
+```
+\newpage
+```{r}
+confusionMatrix(table(prediction, svm_test$Grades), positive = "low_performer")
+```
+The **accuracy** of the model is equal to 0.75. It shows that 75 percent of the predictions of the model are correct. This means that this model is quite a good model.
+The **sensitivity** of the model shows what percentage of actual low performer students are actually predicted to be low performers. It is equal to 0.7143, and it means that 71.43 percent of actual low performer students are actually predicted to be low performers.
+The **specificity** of the model shows what percentage of actual high performer students are actually predicted to be high performers. It is equal to 0.7778, and it means that 77.78 percent of actual high performer students are actually predicted to be high performers.
+**Positive Predictive Value** shows how many of the predicted low performer students are actually low performers. It shows what percentage of the predicted low performer students are actually low performers. It is equal to 0.7143, and it means that 71.43 percent of the predicted low performer students are actually low performers.
+**Negative Predictive Value** shows what percentage of the predicted high performer students are actually high performers. It is equal to 0.7778, which means that 77.78 percent of the predicted high performer students are actually high performers.
+
+
+## KNN regression
+
+**KNN regression** is a nonparametric regression technique. Nonparametric regression is an alternative approach to model complex interactions by deriving the functional form of models from the data itself (Goyal et al., 2013, p. 16).
+We used the number of times that a status of the submission is viewed, number of times that submission is created, number of times a quiz is submitted, number of times a grade user report is viewed, number of times a course is viewed, number of times a file is uploaded, number of times that submission is updated, number of times that a quiz attempt is viewed, number of times that a quiz attempt is started, number of times that feedback is viewed, number of times that a course activity completion is updated, number of different days that a student logs in to Moodle, number of times that a submission form is viewed, number of times that a quiz attempt summary is viewed, number of times that a quiz attempt is reviewed,  number of times that a discussion is viewed, and number of times that a submission has been submitted variables to predict the grade by using kNN regression. 
+The range of the variables varies on a large scale. Hence, we normalize the range of the variables by using **Z-score normalization**. **Z-score** represents the distance of the point from the mean measured in standard deviation. The **mean** is equal to zero, and **standard deviation** is equal to one. The normalization is done in order to make the algorithm independent from the random variable unit.
+
+```{r}
+knn_data_ref<- data_for_modeling[, -1]
+```
+
+```{r}
+knn_data_ref[, 2:18]<-as.data.frame(scale(knn_data_ref[, 2:18]))
+```
+
+We divided our data set into **training** and **testing** sets with an 80-20 ratio.
+```{r}
+set.seed(123)
+part <- createDataPartition(knn_data_ref$Grades, p=0.8, list=F)
+train_student <- knn_data_ref[part,]
+test_student <- knn_data_ref[-part,]
+```
+For choosing the value of **k** in **KNN** algorithm for use **k= sqrt(n)** approach. Here, **n** is the number of observations in the **training** set.
+
+```{r}
+n_train_obs <- length(train_student$Grades)
+```
+```{r}
+knn_reg <- knn.reg(train_student[,-1], test_student[,-1], y=train_student$Grades, k=round(sqrt(n_train_obs)))
+```
+
+```{r}
+rmse <- function(y_actual, y_predicted){
+error_sq <- (y_actual-y_predicted)^2; mean <- mean(error_sq);
+rmse <- sqrt(mean)
+return(rmse)
+}
+```
+
+```{r}
+RMSEtest<-rmse(test_student$Grades, knn_reg$pred)
+```
+
+**The root mean squared error** is equal to 0.70. The closer the root mean squared error is to zero, the more accurate the model is. Hence, we can conclude that the model is accurate.
+
+
+\newpage
+## Conclusion and Recommendations
+
+In the scope of our project, we have done visualizations and found out that the three most frequent activities performed by students are view of a course, view of the status of a submission, and view of quiz attempt. The information obtained by these analyses will contribute to the researchers and instructors for clustering students by their engagement levels identifying low performers. The correlation matrix has been created, and it shows that the highest correlation coefficient exists between grade and submission submitted activity. However, no strong correlation exists.  
+In this work, we have shown how useful the application of data mining techniques in course management
+systems can be for online instructors. Hence, there is no linear relationship between them.
+A *single**K-means** algorithm was used for clustering, while three algorithms were used for classification.
+For **cluster analysis**, we used the K-means algorithm and found out that **43.6** percent of the total variance in the data can be explained by the clusters dividing Between Groups Sum of Squares by Total Sum of Squares.
+For **classification analysis**, we used **Logistic regression**, **Random Forest**, and **Support Vector Machine** methods to predict the students who are low performers and the high performers' students based on their features. The accuracy of **Logistic regression** is 0.125, of **Random Forest** is 0.6875, and of **Support Vector Machine** is 0.75.
+In our project, we have also used **KNN regression** and *the root mean squared error** of the algorithm is equal to 0.70. The closer the root mean squared error is to zero, the more accurate the model is. Hence, we can conclude that the model is accurate.
+After doing all these analyses, we come up to the conclusion that **Support Vector Machine** algorithm suits to our data most since the accuracy of this algorithm is the highest. 
+
+\newpage
+## References
+
+AKCAPINAR, BAYAZIT. (2019). MoodleMiner: Data Mining Analysis Tool for Moodle Learning Management System (Vol. doi: 10.17051/ilkonline.2019.527645). Yeditepe University, Department of Computer Education & Instructional Technology. 
+
+Baker, R. (April 2012). Learning analytics and educational data mining: Towards communication and collaboration (Vol. DOI:10.1145/2330601.2330661 ). Pennsylvania : University of Pennsylvania .
+
+Cristobal Romero * , Sebastian Ventura, Enrique Garcia . (2007). Data mining in course management systems: Moodle case study and tutorial . Spain: a Department of Computer Sciences and Numerical Analisys, University of Cordoba.
+
+Dutt A, Ismail MA, Herawan T. A Systematic Review on Educational Data Mining. Vol. 5, IEEE Access. 2017. p. 15991?6005. 
+
+Hui-Chun Hung 1 , I-Fan Liu 2 , Che-Tien Liang 3 and Yu-Sheng Su 4. ( 28 January 2020). Applying Educational Data Mining to Explore Students? Learning Patterns in the Flipped Learning Approach for Coding Education. Taipei City 110: Graduate Institute of Network Learning Technolog.
+
+Omar R, Md Tap AO, Abdullah ZS. Web usage mining: A review of recent works. 2014 5th Int Conf Inf Commun Technol Muslim World, ICT4M 2014. 2014.
+
+Peng, J. (September 2002). An Introduction to Logistic Regression Analysis and Reporting (Vol. DOI:10.1080/00220670209598786). (P. A. regression, Ed.) The Journal of Educational Research 96(1):3-14.
+
+Rinkaj Goyala, * , Pravin Chandraa , Yogesh Singha. (2013). Suitability of KNN Regression in the Development of Interaction Based Software Fault Prediction Models. Delhi 110078: a University School of Information & Communication Technology, Guru Gobind Singh Indraprastha University.
+Timothy Frank1 and Lauren F.V. Scharff2. (October 2013). Learning contracts in undergraduate courses: Impacts on student behaviors and academic performance (Vols. Vol. 13, No. 4). Journal of the Scholarship of Teaching and Learning.
+
+Romero C, Ventura S. Educational data mining: A review of the state of the art. Vol. 40, IEEE Transactions on Systems, Man and Cybernetics Part C: Applications and Reviews. 2010. p. 601?18. 
+
+
+Youguo Li, Haiyan Wu . (( 2012 ) 1104 ? 1109). A Clustering Method Based on K-Means Algorithm . 464000, China: Department of Computer Science Xinyang Agriculture College Xinyang, Henan.
+
+Cristobal Romero * , Sebastian Ventura, Enrique Garcia . (2007). Data mining in course management systems: Moodle case study and tutorial . Spain: a Department of Computer Sciences and Numerical Analisys, University of Cordoba.
+
+Hui-Chun Hung 1 , I-Fan Liu 2 , Che-Tien Liang 3 and Yu-Sheng Su 4. ( 28 January 2020). Applying Educational Data Mining to Explore Students? Learning Patterns in the Flipped Learning Approach for Coding Education. Taipei City 110: Graduate Institute of Network Learning Technolog.
+
