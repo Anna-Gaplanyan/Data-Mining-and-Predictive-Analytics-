@@ -1,0 +1,556 @@
+---
+title: "Data Mining and Predictive Analytics individual project"
+author: "Anna Gaplanyan"
+date: '17, May, 2021'
+institute: "American University of Armenia" 
+instructor: "Habet Madoyan"
+teaching assistant: "Anna Drnoian"
+output: 
+  pdf_document: 
+    toc: yes
+    highlight: espresso
+    fig_caption: TRUE
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FALSE)
+options(tinytex.verbose = TRUE)
+options(scipen = 999)
+library(ggplot2)
+library(RColorBrewer)
+library(gridExtra)
+library(reshape2)
+library(dplyr)
+library(ggcorrplot)
+library(GGally)
+library(foreign)
+library(caret)
+library(maptools)
+library(factoextra)
+library(clValid)
+library(Hmisc)
+library(car)
+library(tidyverse)
+library(cowplot)
+library(tidyr)
+library(lmtest)
+library(sandwich)
+library(broom)
+library(rgdal)
+library(plyr)
+library(randomForest)
+library(yardstick)
+library(robustbase)
+library(rgeos)
+library(gpclib)
+library(knitr)
+```
+
+
+## Overview
+
+ Criminality is a major danger to humanity. It is growing and spreading at a rapid and broad scale. The police face significant challenges in crime prediction and criminal detection. Hence, the **goal** of the project is to use various data mining tools and techniques in order to predict the crime rate and detect crime hotspots based on locations. This project will aid police forces in forecasting and identifying crime in a given location and diminish the crime rates.
+
+## Literature review
+
+In order to do comprehensive analyzes, I have researched by reading various articles regarding this topic. 
+
+Some authors used Multi Linear regression for forecasting the percapita of Crime rate, and  the k-nearest neighbors algorithm (k-NN) and Logistic Regression models were also tested, but the Multi Linear regression produced minimal error while training the model (Mahendra et al., 2020).
+
+Other authors used Apriori Algorithm. They did this in order to come up with a list of all crime hotspots along with their related frequent time. They also applied Multinomial Naive Bayes, which is used for multinomial distributed data that conforms to the categorical features in their datasets. Additionally, they created a Decision Tree Classifier model, and for evaluating the quality of the split, they applied the entropy function for the information gain (Almanie, et al, 2015).
+
+The authors used clustering methods to help investigators anticipate and eliminate criminal activity. They used the K-means clustering algorithm (Sangani,et al, 2019).
+
+ Other authors used K-Nearest Neighbor and Naive Bayes algorithms in order to detect the places that are inclined to offense (Reddy, et al, 2018). 
+Other authors used Decision Trees and Random Forest Classification, Naive Bayes Classification, and Linear Regression in order to predict the topmost features that affect the high crime rate (Yerpude & Gudur, 2017).
+
+Other authors did Time Series analysis in order to tackle the crime trends forecasting problem. They display how the number of crime incidents changed over time. They found some trends and seasonality in the data and applied Triple Exponential Smoothing (Holt-Winters) to their data. They tested the Naive Bayes model by using cross-validation, and they used 60% of the data as training data and the rest for validation. They also run KNN classifier using rectangular kernel and k = 150 to train their data. After that, they found that larger k does not guarantee smaller errors. Larger k may lead to under-fitting. The results of KNN was better than Naive Bayes (Feng, et all, 2018). 
+As the variables of the data of this project are numeric, I use **KNN regression**, **Random forest for regression**, and **Multiple linear regression** to make predictions of crime rates of local authority areas. The **Classification analysis** for this project will not work. I use **K -Means** algorithm to group local authority areas based on their features, as some of the mentioned authors did in their research.
+
+
+## Research Methodology
+
+The data contains information about the crime rate during two emigration flows in the **United Kingdom**. From this data, I choose the part for only 2008 year. The data is obtained from the **Harvard Dataverse**. The variables of the data set are the names of police force areas, the names of local authority areas, id of local authority area, year of the observation, number of violent crimes reported by year and local authority, number of burglaries reported by year and local authority, number of robberies reported by year and local authority, the number of thefts of motor vehicles reported by year and local authority, number of thefts from motor vehicles reported by year and local authority, number of female asylum seekers is dispersal accommodation by year and local authority, number of male asylum seekers is dispersal accommodation by year and local authority, total number of asylum seekers is dispersal accommodation by year and local authority, number of female asylum seekers receiving subsistence support by year and local authority, number of male asylum seekers receiving subsistence support by year and local authority, total number of asylum seekers receiving subsistence support by year and local authority, total number asylum seekers by year and local authority, total estimated population, mid-year (Office for National Statistics), total estimated population Aged 15-24, mid-year (Office for National Statistics), total estimated population Aged 0-14, mid-year (Office for National Statistics), A8 registrations on the worker registration scheme by year and local authority, claimant count unemployment rate, mid-year (Office for National Statistics), total benefit claimants (Department for Work and Pensions), predicted inflow of A8 immigrants.
+In this project, in the **Visualizations** part, I investigate which variable might be useful for predicting the crime rate by creating a **correlation matrix**. I create a**bar plot** to demonstrate the top 10 local authority areas with the highest crime rate. This will help to detect crime hotspots. I create another **bar plot** to illustrate the top 10 local authority areas with the lowest crime rate. It will allow identifying the safest areas. I also create a map of England and Wales and paint the local authority areas according to their crime rate.
+As the data variables are numeric, I use **KNN regression**, **Random forest for regression**, and **Multiple linear regression** to make predictions of crime rates of local authority areas. As predictor variables, I choose the features that have high correlation coefficients with the crime rate. 
+For **Clustering analysis**, I use the **K -Means** algorithm to group local authority areas based on their features. 
+
+\newpage
+## Analysis
+
+**Visualizations**
+
+```{r}
+mydata <- read.dta("crime_immig.dta") 
+```
+
+```{r}
+noNaData<- na.omit(mydata)
+```
+
+
+```{r}
+moddat<- noNaData%>% dplyr::group_by(`la`, `year`)%>% dplyr::summarise(crime_rate = sum(viol, burg, rob, tomv, tfmv), .groups = "drop" )
+```
+
+```{r}
+moddat<- moddat%>% select_all() %>% dplyr::filter(year == "2008")
+```
+
+
+```{r}
+data2<- noNaData%>% select(c(dispsF, dispsM, dispsMF, subsF, subsM, subsMF, asylumtot, totalpop, pop1524, pop014, wrs, urate, benclaim, year, la)) %>% filter(year == "2008")
+```
+
+
+
+```{r}
+moddat_merged<- left_join(data2, moddat, by = c("year", "la"))
+```
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Total population` = `totalpop`)
+```
+
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Name local authority area` = `la`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Male asylum seekers receiving support` = `subsM`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Female asylum seekers receiving support` = `subsF`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Asylum seekers receiving support` = `subsMF`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Total asylum seekers` = `asylumtot`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Total population (15-24)` = `pop1524`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Total population (0-14)` = `pop014`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Claimant count` = `urate`)
+```
+
+
+```{r}
+moddat_merged<- moddat_merged %>% dplyr::rename(`Crime rate` = `crime_rate`)
+```
+
+```{r}
+data_for_cor<- moddat_merged %>% dplyr::select(c(4,5,6,7,9,10,12,16))
+```
+
+
+**Correlation coefficient** is a measure of the strength of the relationship between two variables.
+
+```{r,fig.cap="Correlation matrix", fig.width = 7, fig.height=7, fig.align='center', out.height="90%", out.width="90%"}
+dat_corr <- round(cor(data_for_cor, use = "pairwise.complete.obs"),2)
+ggcorrplot(dat_corr, type = 'lower', lab = TRUE, hc.order = TRUE) +
+    labs(title = "Correlation matrix")+
+scale_fill_gradient2(low = "green", high = "red",
+mid = "white", midpoint = 0, limit = c(-1,1), name="Correlation")
+```
+According to the **correlation matrix**, the relationships of crime rate and the total number of asylum seekers,  number of male asylum seekers receiving support, number of asylum seekers receiving support, number of female asylum seekers receiving support, and claimant count rate are strong. This is because the correlation coefficients are greater than 0.5. 
+
+
+```{r}
+moddat_merged$`Name local authority area`<- as.factor(moddat_merged$`Name local authority area`)
+```
+
+
+
+```{r}
+data_graph<- moddat_merged[order(moddat_merged$`Crime rate`),]
+```
+
+
+
+```{r}
+dat<- tail(data_graph, 10)
+```
+
+\newpage
+```{r,fig.cap="Bar plot", fig.align='center', fig.height=7, fig.width=10}
+(plot <- ggplot(dat, aes(x=`Name local authority area`, y=`Crime rate`)) +
+   geom_bar(stat="identity", fill = "red") + labs(x= "Name of the local authority area", y="Crime rate", title= "Top 10 local authority areas with highest crime rate"))
+```
+
+
+In this bar plot, I have demonstrated the ten local authority areas with the highest crime rate. As it is shown, the highest crime rate has the Birmingham local authority area.
+
+```{r}
+low_cr<- head(data_graph, 10)
+```
+\newpage
+```{r,fig.cap="Bar plot", fig.align='center', fig.height=7, fig.width= 10}
+(plot <- ggplot(low_cr, aes(x=`Name local authority area`, y=`Crime rate`)) +
+   geom_bar(stat="identity", fill = "light blue") + labs(x= "Name of the local authority area", y="Crime rate", title= "Top 10 local authority areas with lowest crime rate"))
+```
+In this bar plot, I have demonstrated the ten local authority areas with the lowest crime rate. As it is shown, the lowest crime rate has the Teesdale local authority area.
+
+
+```{r, include=FALSE}
+shapefile <- readOGR(dsn = "file", layer="Local_Administrative_Units_Level_1_(December_2015)_Boundaries")
+```
+
+```{r}
+mapdata <- tidy(shapefile, region="lau115nm")
+```
+
+
+```{r}
+maping<-moddat_merged
+```
+
+
+```{r}
+maping<- maping %>% dplyr::rename( id = `Name local authority area`)
+```
+
+```{r}
+mapdata<- join(mapdata, maping, by = "id")
+```
+
+```{r}
+mapdata1<- mapdata %>% filter(!is.na(mapdata$`Crime rate`))
+```
+
+
+```{r}
+crime_categorised <- ifelse(mapdata1$`Crime rate` < 3610, "low", 
+                          ifelse(mapdata1$`Crime rate` >= 3610 & mapdata1$`Crime rate` < 20000, "mid", 
+                                 ifelse(mapdata1$`Crime rate` >= 20000, "high", NA)))
+```
+
+```{r}
+mapdata1$`Crime rate`<-crime_categorised
+```
+
+\newpage
+```{r,fig.cap="Map of of England and Wales", fig.align='center', fig.height=7, fig.width=7, out.height="60%", out.width="60%"}
+(map1<- ggplot(mapdata1, aes(x= long, y = lat, group = group)) +
+  geom_polygon(aes(fill = `Crime rate`), color = "black") + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        rect= element_blank()))
+```
+The **red** points show the **LAs** that have a high crime rate, and the **green** points show **LAs** that have a low crime rate.
+
+
+## **KNN regression**
+
+The prediction that **KNN regression** made provides an average for the nearest neighbors. For **KNN regression**, I select the variables with a high correlation coefficient with the crime rate. I divide the data set into training and testing sets by using an 80/20 ratio.
+
+
+```{r}
+knn_data<- moddat_merged %>% select(c(`Total asylum seekers`, `Male asylum seekers receiving support`, `Asylum seekers receiving support`, `Female asylum seekers receiving support`, `Claimant count`, `Crime rate`))
+```
+
+```{r}
+summary(knn_data)
+```
+
+I normalize the range of the variables using **Z-score normalization** as the range of the variables varies on a large scale. I normalize the data in order to decrease the influence of the arbitrary variable on the model. 
+
+```{r}
+knn_data[, 1:5]<-as.data.frame(scale(knn_data[, 1:5]))
+```
+
+```{r}
+set.seed(1)
+ind_d <- createDataPartition(knn_data$`Crime rate`, p=0.8, list=F)
+train_la <- knn_data[ind_d,]
+test_la <- knn_data[-ind_d,]
+```
+
+```{r, include=FALSE}
+sqrt(length(knn_data$`Crime rate`))
+```
+As the square root of the number of observations is equal to 19.23538., I calculate the **RMSE** for different values of **k** starting from one to the square root of the number of observations. 
+```{r}
+set.seed(1)
+kNN_caret <- train(
+  `Crime rate`~., 
+  data = train_la, 
+  method = "knn",
+  trControl = trainControl("cv", number = 10),
+  preProcess = c("center","scale"),
+  tuneGrid = expand.grid(k=seq(1,21,by=1)) 
+  )
+```
+
+
+```{r, include = FALSE}
+kNN_caret$bestTune
+```
+
+```{r,fig.cap="RMSE vs K", fig.align='center', fig.height=7, fig.width=7, out.height="60%", out.width="60%"}
+ggplot(kNN_caret)+ labs(x="Number of nearest neighbors", y ="RMSE", title="RMSE vs K")
+```
+
+The **optimal value** of **k** is equal to **three**. 
+
+```{r}
+kNN_predict <- predict(kNN_caret, newdata = test_la)
+```
+
+```{r}
+rmse <- function(y_actual, y_predicted){
+  error_sq <- (y_actual-y_predicted)^2; mean <- mean(error_sq);
+  rmse <- sqrt(mean)
+  return(rmse)
+}
+```
+
+
+```{r, include = FALSE}
+rmse(test_la$`Crime rate`, kNN_predict)
+```
+**The root mean squared error** for the test dataset is equal to 2400.341. The closer the root mean squared error is to zero, the more accurate the model is. Hence, it can be stated that the model is inaccurate.
+
+\newpage
+## K-Means Algorithm
+
+In this project, I use the **K-Means algorithm** in order to divide the **LAs** into groups based on their characteristics. I normalize the range of the variables by using **Z-score normalization**. In order to find the optimal value of **k**, I use the **Elbow method**. 
+
+```{r}
+k_means<- moddat_merged %>% select(c(`Total asylum seekers`, `Male asylum seekers receiving support`, `Asylum seekers receiving support`, `Female asylum seekers receiving support`, `Claimant count`, `Crime rate`))
+```
+
+
+```{r}
+k_means[, 1:5]<-as.data.frame(scale(k_means[, 1:5]))
+```
+
+
+I use **fviz_nbclust()** function from **factoextra** package in order to create **Elbow curve**.
+
+```{r,fig.cap="Elbow curve", fig.align='center', fig.height=5, out.height="60%", out.width="60%"}
+set.seed(1)
+fviz_nbclust(k_means, kmeans, method = "wss")
+```
+
+According to the graph, it can be stated that by increasing the number of k, the total within sum of squares decreases. The optimal number of k for the **k-means algorithm**  is the number for which the decrease in **WSS** will be small as the number of k increases. In this case, the optimal value for **k** is **three**.  
+
+```{r}
+set.seed(1)
+k_m <- kmeans(k_means,3)
+```
+
+
+I evaluate the model performance using **internal measures** such as **Silhouette coefficient**, **Dunn index**, **Connectivity**. 
+
+```{r, include=FALSE}
+set.seed(1)
+internal_measures <- clValid(k_means[, 1:6], nClust = 3, clMethods = "kmeans",
+validation = "internal")
+summary(internal_measures)
+```
+**Connectivity** is **13.1921**, which means that not all the nearest neighbors are in the same cluster. The **Silhouette coefficient** is equal to **0.7290**, and it can be concluded that the clustering is good as it is close to one.  The **Dunn index** is **0.0066**. This means that **min.separation** is lower and **max.diameter** is higher. As the **min.separation** is lower, between cluster distance is lower. As the **max. diameter** is higher, the within-cluster distances are higher.   
+
+```{r, include=FALSE}
+k_m$betweenss/k_m$totss
+```
+**80.91** percent of the total variance in the data can be explained by the clusters dividing Between Groups Sum of Squares by Total Sum of Squares.
+
+\newpage
+```{r,fig.cap="Cluster plot", fig.align='center', fig.height=7, fig.width=8, out.height="50%", out.width="50%"}
+fviz_cluster(k_m, data = k_means,
+             palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+```
+According to the **Cluster plot**, the spread of the points in cluster number 1 is less than the spread of cluster number 2 and 3.  This means that within group sum of squares for cluster number one is less than for cluster number 2 and 3.
+
+
+## Random forest for regression
+
+
+In random forest for regression algorithm, I choose the variables that have high correlation coefficients with the crime rate. I divide the data into **training** and **testing** set by using 80/20 proportion. 
+```{r}
+rand_data<- moddat_merged %>% select(c(`Total asylum seekers`, `Male asylum seekers receiving support`, `Asylum seekers receiving support`, `Female asylum seekers receiving support`, `Claimant count`, `Crime rate`))
+```
+
+
+```{r}
+rand_data<- rand_data %>% dplyr::rename(total_asylum_seekers=`Total asylum seekers`)
+```
+
+
+```{r}
+rand_data<- rand_data %>% dplyr::rename(male_asylum_seekers_receiving_support =`Male asylum seekers receiving support`)
+```
+
+```{r}
+rand_data<- rand_data %>% dplyr::rename(asylum_seekers_receiving_support =`Asylum seekers receiving support`)
+```
+
+
+
+```{r}
+rand_data<- rand_data %>% dplyr::rename(female_asylum_seekers_receiving_support =`Female asylum seekers receiving support`)
+```
+
+```{r}
+rand_data<- rand_data %>% dplyr::rename(claimant_count =`Claimant count`)
+```
+
+
+```{r}
+rand_data<- rand_data %>% dplyr::rename(crime_rate =`Crime rate`)
+```
+
+```{r}
+train_size <- floor(nrow(rand_data)*0.8)
+set.seed(1)
+index <- sample(nrow(rand_data), size = train_size, replace = FALSE)
+```
+
+
+```{r}
+train_rand <- rand_data[index,]
+test_rand <- rand_data[-index,]
+```
+
+I define the value of **mtry** to be equal to the square root of the number of the predictor.
+
+
+```{r}
+set.seed(1)
+rand_model<- randomForest(crime_rate ~., data= train_rand,  mtry = 2)
+```
+
+```{r,fig.cap="Error vs trees", fig.align='center', fig.height=5, out.height="60%", out.width="60%"}
+plot(rand_model, main = "Random forest for regression")
+```
+
+
+According to the graph, the error is decreasing by adding more and more trees and average them.
+
+```{r, include =FALSE}
+set.seed(1)
+which.min(rand_model$mse)
+```
+The optimal number of trees is equal to 253.
+
+```{r}
+ran_model<- randomForest(crime_rate ~., data= train_rand, ntree = 253, mtry = 2)
+```
+\newpage
+```{r,fig.cap="Importance of features", fig.align='center', fig.height75, fig.width=7, out.height="70%", out.width="70%"}
+varImpPlot(ran_model, main="Importance of features", type = 2)
+```
+For the **Mean Decrease Gini (IncNodePurity)**, the most important variable is the **total number of asylum seekers**.
+
+```{r}
+predicted<- predict(ran_model, test_rand)
+```
+
+```{r}
+pred_score <- as_tibble(cbind(test_rand, predicted))
+```
+
+```{r}
+RMSE_test <- yardstick::rmse(pred_score, truth=crime_rate, estimate=predicted)
+```
+**The root mean squared error** is equal to 2649.095. The closer the root mean squared error is to zero, the more accurate the model is. Therefore, it can be stated that the model is inaccurate.
+
+
+\newpage
+
+## Multiple linear regression
+
+I use **Multiple linear regression** to make predictions of crime rates of local authority areas.
+```{r}
+mult_reg<- moddat_merged %>% select(c(`Crime rate`,`Total asylum seekers`,`Male asylum seekers receiving support`,`Female asylum seekers receiving support`,`Claimant count`,`Total population (0-14)`, `Total population (15-24)`))
+```
+I create a correlation matrix for independent variables. As the correlation coefficient between Total population (15-24) and Total population (0-14) is 0.9418742, I eliminate the Total population (15-24) variable (multicollinearity).
+```{r}
+cor(mult_reg[, -1])
+```
+
+\newpage
+```{r}
+rcorr(as.matrix(mult_reg))
+```
+
+```{r}
+model<- lm(`Crime rate`~ `Total asylum seekers` + `Male asylum seekers receiving support`+`Female asylum seekers receiving support` + `Claimant count` + `Total population (0-14)`, data = mult_reg)
+```
+
+I use **vif** function in order to measure the amount of multicollinearity in a set of multiple regression variables. It helps to understand whether one of the independent variables is highly correlated with others or not. 
+
+```{r}
+vif(model)
+```
+As the variance inflation factor of the **Male asylum seekers receiving support** variable is greater than five, it should be removed. After removing it I run linear model.
+
+\newpage
+```{r}
+model_2<-lm(`Crime rate`~ `Total asylum seekers` + `Female asylum seekers receiving support` + `Claimant count` + `Total population (0-14)`, data = mult_reg)
+summary(model_2)
+```
+\newpage
+
+I measure the amount of multicollinearity in a set of multiple regression variables one more time. 
+```{r}
+vif(model_2)
+```
+After removing the **Male asylum seekers receiving support** variable, there is no variance inflation factor greater than five. 
+In case when the variance for all observations is not the same, **heteroskedasticity** occurs. I check the heteroscedasticity by using **bptest** function from **lmtest** package. This function does the **Breusch-Pagan** test.
+```{r}
+bptest(model_2)
+```
+The **p-value** is equal to  0.0000000003364, which is less than alpha. Hence, the null hypothesis should be rejected. This means that there is heteroscedasticity. As there is heteroscedasticity, the ordinary least squares no longer produce the best linear unbiased estimators **BLUE**, and standard errors estimated using least squares can be incorrect. Therefore, the useage of multiple linear regression is not valid.
+\newpage
+
+## Conclusion and Recommendations
+
+During the project, I have done visualizations to represent the top 10 crime hotspots and the top 10 safe areas. I visualize the map of England and Wales and paint the local authority areas according to their crime rate. By creating **correlation matrix**, I figure out that the relationships of crime rate and the total number of asylum seekers,  number of male asylum seekers receiving support, number of asylum seekers receiving support, number of female asylum seekers receiving support, and claimant count rate are strong.
+I use **KNN regression** and get that the **root mean squared error** for the test dataset is equal to **2400.341**. 
+I use the **K-Means algorithm** to divide the **LAs** into clusters based on their features. The connectivity	is equal to 13.1921, Dunn	index is equal to 0.0066, and the Silhouette is equal to 0.7290. **80.91** percent of the total variance in the data can be explained by the clusters dividing Between Groups Sum of Squares by Total Sum of Squares.
+In the **Random forest for regression**, I find out that the optimal number of trees is equal to 253, and the most important variable for the **Mean Decrease Gini (IncNodePurity)** is the **total number of asylum seekers**. **The root mean squared error** for the test set is equal to **2649.095**.
+In **Multiple linear regression** I observe that there is a statistically significant relationship between **crime rate** and **Total asylum seekers**, **Female asylum seekers receiving support**, **Claimant count**, and **Total population (0-14)**
+As heteroscedasticity is detected in the **multiple linear regression**, it makes the method invalid.
+As the **RMSE** of the **KNN regression** is less than the **RMSE** of the **Random forest for regression**, I recommend using **KNN regression** to make predictions of crime rates of local authority areas. 
+
+
+\newpage
+## References
+
+1. A. Sangani, C. Sampat, V. Pinjarkar, Crime prediction and analysis, in Proceedings of 2nd International Conference on Advances in Science&Technology, SSRN: Elsevier, India (2019), pp. 1?5.
+2.Ch. Mahendra, G. Nani Babu, G. Balu Nitin Chandra , A. Avinash , Y. Aditya. (2020, May 5). CRIME RATE PREDICTION.
+3.Ginger Saltos, Ella Haig. (2017, May). An Exploration of Crime Prediction Using Data Mining on Open Data.
+4. H. Toppi Reddy, B. Saini, G. Mahajan. (2018). Crime prediction & monitoring framework based on spatial analysis. Proc. Comput. Sci. 132, 696?705.
+5.Mingchen Feng, Jinchang Ren, Qiaoyuan Liu. (2018, July). Big Data Analytics and Mining for Crime Data Analysis, Visualization and Prediction: 9th International Conference, BICS 2018, Xi'an, China, July 7-8, 2018, Proceedings.
+6.Nahid Jabeen, Parul Agarwal. (2021, January). Data Mining in Crime Analysis.
+7.Prajakta Yerpude, Vaishnavi Gudur. (2017, July). PREDICTIVE MODELLING OF CRIME DATASET.
+8.Tahani Almanie, Rsha Mirza, Elizabeth Lor. (2015, July). CRIME PREDICTION BASED ON CRIME TYPES.
