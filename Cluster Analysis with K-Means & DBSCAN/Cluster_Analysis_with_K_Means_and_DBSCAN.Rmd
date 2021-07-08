@@ -1,0 +1,168 @@
+---
+title: "Cluster Analysis with K-Means & DBSCAN"
+author: "Anna Gaplanyan"
+date: "5, May, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+options(scipen = 999)
+library(ggplot2)
+library(dplyr)
+library(fpc)
+library(factoextra)
+library(clValid)
+library(dbscan)
+library(knitr)
+library(tidyverse)
+library(mapproj)
+library(maps)
+```
+
+Write your solutions and comments in this markdown file and submit it with knitted pdf version to Moodle.  
+
+## Data Preparation
+
+We have taxi rank locations in Johannesburg ("taxi_data.csv"), and we will use it to cluster the taxi locations. The goal is to define key clusters of these taxis so that we can build service stations for all taxis operating in that cluster/region. 
+
+1) Remove duplicate rows in a dataframe based on Longitude and Latitude columns (variables). Hint: you can check if there are any duplicate values with `anyDuplicated()` and the function `distinct()` [dplyr package] can be used to keep only unique/distinct rows from a dataframe. Once the duplicates are removed, create a new dataframe with all but the last variable `NAME` from the dataset. (3 points)
+
+```{r}
+data_taxi<- read.csv("taxi_data.csv")
+```
+
+
+```{r}
+anyDuplicated(data_taxi)
+```
+```{r}
+anyNA(data_taxi)
+```
+
+
+```{r}
+dataNoDuplicates<- distinct(data_taxi)
+```
+
+
+```{r}
+new_dataframe<- dataNoDuplicates[, -3]
+```
+
+
+
+2) Visualize Longitude vs. Latitude using ggplot(). Specify alpha = 0.2 and size = 3.(2 points)
+
+
+```{r}
+ggplot(new_dataframe, aes(x = LON, y = LAT, alpha = 0.2)) + 
+  geom_point(size = 3) 
+```
+
+
+## K-Means clustering
+
+3) Before proceeding with the analysis, estimate the optimal value of k by plotting the elbow curve of the Total Within Groups Sum of Squares ("wss") vs. k. You can use `fviz_nbclust()` [factoextra package]. (5 points)
+
+
+```{r}
+set.seed(1)
+fviz_nbclust(new_dataframe, kmeans, method = "wss")
+```
+The optimal value of k is 3 because at 3 the distortion starts decreasing in a linear fashion.
+4) Implement the k-means algorithm using the "best" value of k found above. What are the clusters' means? (display them) (5 points)
+
+```{r}
+set.seed(1)
+kmeans_clusters <- kmeans(new_dataframe, centers = 3)
+```
+
+```{r}
+kmeans_clusters$centers
+```
+
+
+5) How good is the clustering? Explore how much of the total variance in the data can be explained by the clusters dividing Between Groups Sum of Squares by Total Sum of Squares. (5 points)
+
+```{r}
+kmeans_clusters$betweenss/kmeans_clusters$totss
+```
+65.97% of the total variance in the data can be explained by the clusters.
+
+6) Append the assigned cluster membership to the dataset and visualize the clusters using ggplot(). Map the clusters to color aesthetic and add clusters' centers to the graph. (5 points)
+
+```{r}
+new_dataframe$Cluster_kmeans <- kmeans_clusters$cluster
+```
+
+```{r}
+ggplot(new_dataframe, aes(LON, LAT, color=factor(Cluster_kmeans))) + 
+  geom_point()+
+  geom_point(data=data.frame(kmeans_clusters$centers, Cluster_kmeans = factor(1:3)),
+             aes(LON, LAT, color=Cluster_kmeans), pch=8,size=10)+
+  labs(x = "Longitude", y = "Latitude", title= "Visualization of clusters", col = "Clusters")+
+  coord_map()
+```
+
+
+
+## DBSCAN
+
+7) Before proceeding with DBSCAN, we need to determine the optimal "eps" value. 
+For that, plot the distribution of distances between data points and their k nearest neighbors using the `kNNdistplot()` function [dbscan package].The value of k should be specified by the analyst and corresponds to minimum points (MinPts). Examine the plot and find a tentative threshold at which distances start increasing quickly. The aim is to determine the "knee", which corresponds to the optimal "eps" parameter. On the same plot, draw a horizontal line at the level of the threshold.(10 points)
+
+```{r}
+kNNdistplot(new_dataframe, k = 5)
+abline(h = 0.09, lty = 2)
+```
+
+8) Use the `dbscan()` function [from dbscan package] to find density-based clusters in the data (do not forget to set a seed). 
+Set the size of the epsilon neighborhood at the level of the found threshold, and the number of MinPts in the eps region equal to k specified above.
+Print the value returned by the function. How many clusters did you get? (10 points)
+
+```{r}
+set.seed(1)
+dbscan_clusters <- dbscan::dbscan(new_dataframe, eps = 0.09, minPts = 5)
+dbscan_clusters
+```
+I got 8 clusters. There are 24 outliers. 
+9) Plot the clusters with the `fviz_cluster()` [factoextra package]. Choose the geometry type to draw only points on the graph, and assign the ellipse parameter value such that an outline around points of each cluster is not drawn. (5 points)
+Note that the fviz_cluster() function produces a 2-dimensional plot. If the data set contains two variables those variables are used for plotting, if the number of variables is bigger the first two principal components are drawn.
+
+```{r, fig.height=7}
+fviz_cluster(dbscan_clusters,  dplyr::select(new_dataframe, LON, LAT), geom = "point", main = "Plot of clusters", xlab = "longitude", ylab = "latitude", ellipse = FALSE)
+```
+
+
+## Comparing Clustering methods
+
+10) Lastly, compare the results of DBSCAN and K-Means using the within clusters sum of squares and silhouette analysis. Which of the methods performed better on taxi rank locations data? (10 points)
+
+
+```{r}
+sapply(list(kmeans = kmeans_clusters$cluster, dbscan = dbscan_clusters$cluster),
+    function(x) cluster.stats(dist(new_dataframe[1:2]), x)[c("within.cluster.ss", "avg.silwidth")])
+```
+The within cluster sum of squares is small for kmeans. The average silhouette is large for kmeans. This means that kmeans performed better on taxi rank location data.
+
+
+```{r}
+db_clusters_vector <- dbscan_clusters$cluster
+
+db_distances <- dist(new_dataframe[1:2])
+
+db_silhouette <- silhouette(db_clusters_vector, db_distances)
+
+fviz_silhouette(db_silhouette)
+```
+
+
+```{r}
+km_clusters_vector <- kmeans_clusters$cluster
+
+km_silhouette <- silhouette(km_clusters_vector, dist(new_dataframe[1:2]))
+
+fviz_silhouette(km_silhouette)
+```
