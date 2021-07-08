@@ -1,0 +1,256 @@
+---
+title: "Data Mining HW4: Tree-based models & kNN"
+author: "Anna Gaplanyan"
+date: '22, April 2021'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+options(scipen = 999)
+
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+library(ROCR)
+library(class)
+library(reshape2)
+library(knitr)
+```
+
+Write your solutions and comments in this markdown file and submit it with knitted pdf version to Moodle.  
+
+In this homework you'll work with the Wisconsin Breast Cancer Dataset from the UCI machine learning repository. You'll predict whether a tumor is malignant or benign based on its features. Firstly load the data, explore it and convert the outcome variable `diagnosis` into factor.
+
+
+
+*1* **Tree-based models(35 points)**
+
+*1.1* Using train() function from *caret* package perform a 10-fold cross-validation of a random forest model with the outcome variable `diagnosis` and the rest of the variables as inputs (don't forget to set a seed). We can tell R to train the models and calculate ROC measures rather than just accuracy. For that, train function should get the following argument: metric="ROC"; inside train control specify classProbs=TRUE, and summaryFunction=twoClassSummary. 
+
+```{r}
+data<- read.csv('wbc.csv')
+```
+
+```{r}
+data$diagnosis<- as.factor(data$diagnosis)
+```
+
+
+```{r}
+set.seed(1)
+ctr <- trainControl(method="cv", number=10, classProbs=T, summaryFunction=twoClassSummary)
+```
+
+
+```{r}
+set.seed(1)
+(mod_caret <- train(diagnosis~., data=data, trControl=ctr, method="rf", metric = "ROC"))
+```
+
+
+*1.2* Plot the AUC by applying plot() over the model. Which "mtry" value (number of variables randomly sampled as candidates at each split) produces better results? (we will use it to tune the model).
+
+```{r}
+plot(mod_caret, main = "Area under the curve ")
+```
+
+According to the graph, we can state that the optimal value of mtry is equal to two as the corresponding ROC is the highest.
+
+
+*1.3* Split the data into training and testing sets with 80/20 principle using createDataPartition(). Do not forget to set a seed.
+
+
+```{r}
+set.seed(1)
+ind <- createDataPartition(data$diagnosis, p=0.8, list=F)
+data_train <- data[ind,]
+data_test <- data[-ind,]
+```
+
+
+*1.4* Before a more complex model, built a classification tree on the train data using *rpart* library and visualize it with fancyRpartPlot().
+
+
+```{r}
+model_class <- rpart(diagnosis~., data=data_train)
+```
+
+
+```{r, fig.height=7}
+fancyRpartPlot(model_class, main = "Classification tree")
+```
+From the classification tree, we can see that if concave.points_worst is greater than 0.14 then we go to the right(area_worst). If area_worst is greater than 730, then the predicted class is malignant with the probability of 0.99.
+
+
+*1.5* Train a Random Forest model on the training data with 50 trees using *randomForest* package. As before, the outcome variable is `diagnosis`, other variables are features. Specify "mtry" to be equal to the optimal value found in step 1.1. Also, set importance argument equal to TRUE to estimate the independent variables' importance in the model.
+
+```{r}
+set.seed(1)
+model_random_forest <- randomForest(diagnosis~., data=data_train, ntree=50, mtry = 2, do.trace=T, importance = TRUE)
+```
+OOB (out-of-bag) error for the model is 2.85%.
+*1.6* Visualize the importance of the features using varImpPlot(). For each variable in the matrix this plot tells you how important the variable is in classifying your data. Top is the most important bottom is least important. What are the top 3 predictor variables?
+
+```{r, fig.weight= 10, fig.height= 8}
+varImpPlot(model_random_forest, main = "Importance of features")
+```
+
+The higher the variable scores here, the more important it is for the model. The top 3 predictor variables for Mean Decrease Accuracy are concave points worst, radius mean, and the area mean. The top 3 predictor variables for Mean Decrease in Gini coefficient are concave points mean, radius worst, and concave points worst. 
+
+*1.7* Predict the probabilities on the testing set.
+
+```{r}
+pr <- predict(model_random_forest, data_test, type ="prob")
+pr[1:10, ]
+```
+
+*1.8* Evaluate the model's performance on the testing set using different metrics.
+
+```{r}
+p_test <- prediction(pr[,2], data_test$diagnosis)
+perf <- performance(p_test, "tpr", "fpr")
+plot(perf, main = "ROC curve")
+```
+As the ROC curve is close to the left corner, we can state that our model is better than the random guess model, and it is quite a good model.
+
+```{r}
+performance(p_test, "auc")@y.values
+```
+The area under the curve is 0.97334, and it can be base for us to state that the model is good.
+
+```{r}
+p_class <- predict(model_random_forest, data_test, type ="class")
+```
+
+```{r}
+confusionMatrix(p_class, data_test$diagnosis, positive = "M")
+```
+The model's accuracy is 0.9381, which is a base for us to consider the model as good.
+
+*2* **kNN (25 points)**
+
+*2.1.* Using *caret::train()*, implement a repeated cross-validation (4 x 5-fold) on the full dataset. Check if the normalization/scaling of the independent variables is appropriate beforehand and apply the preprocessing. Change `tuneLength=5` to tell train() to explore 5 models.
+
+
+```{r}
+data_long <- melt(data, id.vars = "diagnosis", variable.name = "Indicators", value.name = "Values of indicators")
+head(data_long)
+```
+
+```{r, fig.width= 15, fig.height= 15 }
+ggplot(data_long, aes(x= Indicators, y= `Values of indicators`, fill=diagnosis))+
+  geom_boxplot()+
+  facet_wrap(~Indicators, scale="free")+
+  ggtitle("The distribution of diagnosis based on indicators")
+```
+
+The scales of variables vary a lot. In this case, we need to normalize the values.
+
+```{r}
+summary(data)
+```
+
+The minimum value of the fractal_dimension_worst variable is 0.05504, and the maximum value is 0.20750. The minimum value of the area_worst variable is 185.2, and the maximum value is 4254.0. As their scales are very different, we need to normalize our data.
+
+
+```{r}
+set.seed(1)
+knn_repeated_val <- train(
+  `diagnosis`~.,
+  data=data,
+  method = "knn",
+  preProcess = c("center","scale"),
+  trControl = trainControl(method = "repeatedcv", number = 5, repeats = 4),
+  tuneLength= 5)
+```
+
+
+```{r}
+knn_repeated_val
+```
+The optimal value of k is 9.
+
+*2.2* Plot the obtained model. What's the optimal value for k (# of neighbors)?
+```{r, fig.align='center'}
+plot(knn_repeated_val, main = "Accuracy vs Number of neighbors")
+```
+As we can see, the optimal value for k is 9.
+*2.3* Split the normalized data into train and test with the same proportions as above but using sample() function. 
+
+```{r}
+normalize <- function(x){
+  num <- x - min(x)
+  denom <- max(x) - min(x)
+  return (num/denom)
+}
+```
+
+
+```{r}
+data[2:31] <- data[2:31] %>% lapply(normalize) %>% as.data.frame
+```
+
+
+```{r}
+train_size <- floor(nrow(data)*0.8)
+set.seed(1)
+index <- sample(nrow(data), size = train_size, replace = FALSE)
+```
+
+
+```{r}
+train <- data[index,]
+test <- data[-index,]
+```
+
+
+
+*2.4* Build a kNN model on the training data for the same variables using the *class* package and specify the number of neighbors/k to be equal to the optimal value found in step 2.1.
+
+```{r}
+knn_class_probs <- knn(train[,-1], test = test[,-1], cl=train$diagnosis, k=9, prob = T)
+```
+
+
+*2.5* Make a prediction for the test set.
+
+```{r}
+attr(knn_class_probs, "prob")
+```
+
+
+```{r}
+knn_class <- knn(train[,-1], test = test[,-1], cl=train$diagnosis, k=9)
+```
+
+```{r}
+dafr<-data.frame(class=knn_class, probs=attr(knn_class_probs, "prob"))
+ head(dafr) 
+```
+
+
+*2.6* Evaluate the model's performance on the testing set using different metrics. Compare with the Random Forest model.
+
+```{r}
+table(knn_class, test$diagnosis)
+```
+The misclassification rate is equal to 5 + 1 = 6
+
+```{r}
+confusionMatrix(knn_class, test$diagnosis)
+```
+
+The accuracy is 0.9474. Hence, we conclude that the model is good.
+
+
+```{r}
+mean(knn_class_probs==test$diagnosis) # Average Accuracy
+```
+
+
+TThe accuracy of the Random Forest model is 0.9381, which is less than the accuracy of KNN, that is 0.9474. Therefore, we can conclude that KNN is better than the Random Forest model.
+
+
