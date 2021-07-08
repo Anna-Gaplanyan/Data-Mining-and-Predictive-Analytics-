@@ -1,0 +1,358 @@
+---
+author: "Anna Gaplanyan"
+title: "Linear Regression"
+date: 05, March, 2021
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = FALSE)
+
+options(scipen = 999)
+library(ggplot2)
+library(dplyr)
+library(broom)
+library(ggcorrplot)
+library(GGally)
+library(plot3D)
+library(magrittr)
+library(Hmisc)
+library(car)
+library(lmtest)
+```
+
+Write your solutions and comments in this markdown file and submit it with its pdf version to Moodle.  
+Make sure to explain/interpret all the findings. (If not done you will lose points.) 
+
+For this HW assignment, we will use International Monetary Fund’s World Economic Outlook Database (WEO), released in October 2020. WEO database contains selected macroeconomic data series in major country groups and in many individual countries. 
+
+Data starting from 2000 till 2020 has been retrieved, since for many countries the data for earlier years was incomplete or unavailable (note: there are still many missing values that you need to handle before creating correlations).
+
+```{r}
+WEO_data <- read.csv("WEOOct2020data.csv")
+w_data <- na.omit(WEO_data)
+```
+
+
+
+**1.** Examine the relationship between Unemployment and GDP per capita. Create a scatterplot. Show “Country groups” as the 3rd aesthetics. What kind of relationship do you see? Apply various methods to overcome overplotting. (2 points)
+```{r}
+(graph <- ggplot(w_data, aes(`Unemployment`, `GDP.per.capita`, color = `Country.Groups`)) + geom_jitter(height=0.3, width = 0.3)+ 
+labs(x = "Unemployment", y = "GDP.per.capita", title = "The relationship between Unemployment and GDP.per.capita") + geom_rug(alpha=0.7))
+```
+
+
+There is a negative linear relationship between Unemployment and GDP.per. Capita variables.
+
+**2.** Elaborate on the following: “Is it right to pool economic data for all countries together or should the two economic groups (Advanced economies vs. Developing) be analyzed separately? Why? Backup your arguments with corresponding analysis and visualizations.(2 points)
+
+
+```{r}
+summary(m<- lm(`GDP.per.capita` ~ `Country.Groups`, data = w_data))
+```
+
+In the model, the t value for Emerging and Developing Economies and Advanced Economies are different, and it is a sign that we should consider them separately.
+
+```{r}
+t.test(`Unemployment`~`Country.Groups`, data = w_data, var.equal = T)
+```
+
+As the p-value is less than alpha(alpha = 95 percent, p-value = 0.00000000000000022), we should reject H0, which means that means of country groups are statistically significantly different. Therefore, we should analyze them separately.
+```{r}
+t.test(`GDP.per.capita`~`Country.Groups`, data = w_data, var.equal = T)
+```
+
+As the p-value is less than alpha(alpha = 95 percent, p-value = 0.00000000000000022), we should reject H0, which means that means of country groups are statistically significantly different. Therefore, we should analyze them separately.
+
+```{r}
+ggplot(w_data, aes(`Unemployment`, `GDP.per.capita`)) +
+geom_point() +
+geom_smooth(method = 'lm', formula = y ~ x, se = F)
+```
+
+```{r}
+da<- w_data %>%
+  filter(`Country.Groups` == "Emerging and Developing Economies")
+ggplot(da, aes(`Unemployment`, `GDP.per.capita`)) + geom_point() +
+geom_smooth(method = 'lm', formula = y ~ x, se = F)
+```
+
+```{r}
+da<- w_data %>%
+  filter(`Country.Groups` == "Advanced Economies")
+ggplot(da, aes(`Unemployment`, `GDP.per.capita`)) + geom_point() +
+geom_smooth(method = 'lm', formula = y ~ x, se = F)
+```
+
+
+```{r}
+ggplot(w_data, aes(`Unemployment`, `Country.Groups`)) +
+geom_boxplot() + labs(x = "", y = " ")+
+stat_summary(fun.y=mean, geom="point", shape=22, size=2, fill = "red") +
+theme(legend.position="none", axis.title.x = element_blank())
+```
+
+As the economy type is changed from Emerging and Developing Economies to  Advanced Economies, the spread of values decreases, and there is enough change in the center of the distribution.
+
+```{r}
+ggplot(w_data, aes(`GDP.per.capita`, `Country.Groups`)) +
+geom_boxplot() + labs(x = "", y = " ")+
+stat_summary(fun.y=mean, geom="point", shape=22, size=2, fill = "red") +
+theme(legend.position="none", axis.title.x = element_blank())
+```
+
+As the economy type is changed from Emerging and Developing Economies to  Advanced Economies, the spread of values increases, and there is enough change in the center of the distribution. According to these box plots, the two economic groups (Advanced economies vs. Developing) should be analyzed separately.
+
+
+```{r}
+ggplot(w_data, aes(`GDP.per.capita`)) +
+  geom_histogram(fill = "light blue")+
+  ggtitle("Distribution of GDP.per.capita according to economy type of countries ") +
+  facet_wrap(~`Country.Groups`)
+```
+According to this histogram, the distribution of GDP.per.capita for the two countries are different. Hence, we should analyze them separately.
+
+**3.** Develop the estimated regression equation that could be used to predict Unemployment rate in a country based on country's GDP per capita. Write down the equation. Is the relationship significant at the 0.05 level of significance? (3 points)
+```{r}
+model1 <-lm(formula = `Unemployment`~`GDP.per.capita`, data = w_data)
+summary(model1)
+```
+ The relationship is significant as the P-value, which is 0.00000000000000022,  is less than 0.05. 
+ 
+ 
+ Unemployment = y
+ GDP.per.capita = x
+The regression formula:
+
+$$\hat y = \hat\beta_0+\hat\beta_1x_1$$
+
+$$\hat y = 12.266655253-0.000114284x_1$$
+ 
+**4.** Do you believe the estimated regression equation would provide a good prediction of the Unemployment in a country? Use $r^2$ to support your answer. (2 points)
+
+ R-squared shows the goodness of fit. R-squares shows the proportion of the variance in y explained by regression (by the variation of the independent variable). In this case, R-squared is 0.1845, which is less than 0.5, which means that the estimated regression equation would not provide a good prediction of the Unemployment in a country.
+
+**5** Visualize predicted values for the model vs. observed values (residuals). Connect the observed data points with their corresponding predicted value using geom_segment(). Map color to residual with sign taken into account, i.e., whether actual value is greater or less than predicted (2 points)
+
+
+```{r}
+w_augment <- model1 %>% augment()
+```
+
+
+```{r}
+ggplot(w_augment, aes(x = `GDP.per.capita`, y = `Unemployment`)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_segment(aes(xend = `GDP.per.capita`, yend = .fitted), alpha = .2) +  
+  geom_point(aes(color = abs(.resid))) + 
+  guides(alpha = FALSE) +
+  scale_color_gradient2(low = "green", mid = "red", high = "black") +
+  geom_point(aes(y = .fitted), shape = 1) + 
+  theme_bw()+
+  labs(x = "GDP per capita", y = "Unemployment", 
+  title = "Predicted values for the model vs. observed values")
+```
+
+
+```{r}
+w_data$predicted <- predict(model1)
+w_data$residuals <- residuals(model1)
+```
+
+
+```{r}
+ggplot(w_data, aes(x = `GDP.per.capita`, y = `Unemployment`)) +
+    geom_smooth(method = "lm", se = FALSE) +
+    geom_segment(aes(xend = `GDP.per.capita`, yend = predicted), alpha = .2) +
+    geom_point(aes(color = residuals)) + 
+    scale_color_gradient2(low = "pink", mid = "yellow", high = "green") +
+    geom_point(aes(y = predicted), shape = 1) + theme_bw() +
+  labs(x = "GDP per capita", y = "Unemployment", 
+  title = "Predicted values for the model vs. observed values")
+```
+
+Some points are greater than the predicted value, and meanwhile, some points are less than the predicted value.
+**6.** Provide an interpretation of the intercept ($b_0$), and the slope ($b_1$), in this problem. (2 points)
+
+```{r}
+summary(model1)$coefficients
+```
+The slop, which is -0.0001142838, means that one unit increase in GDP per capita will cause Unemployment to decrease by 0.0001142838. In this particular model, there is no value to interpret the intercept as there are no x observations equal to 0. There cannot be a country, which has zero GDP per capita.
+
+**7.** Suppose that for a given country the GDP per capita is $31500. Using the estimated regression equation, calculate the Unemployment rate. (2 points)
+$$\hat y = 12.266655253-0.000114284x_1$$
+$x_1$ = $31500
+$$\hat y = 12.266655253-0.000114284 * 31500 = 8.666709253$$
+
+**8.** Create a scatterplot matrix to discover the relationship between all economic indicators available in the dataset. Hint: you can use ggpairs() (2 points)
+
+```{r, fig.height = 12, fig.width= 15}
+ggpairs(w_data, columns = 4 : 12, progress = FALSE) +
+ggtitle("Scatterplot matrix for all economic indicators")
+```
+
+The highest correlation is between Exports and Imports variables, and the lowest correlation is between Government revenue and Unemployment variables. 
+
+
+**9.** Filter the dataset for only **Advanced Economies**. Create a **multiple regression model** to estimate `Investment` based on all **numeric** variables from the dataset. Is the model significant (based on F-test)? Interpret Adjusted $r^2$. (4 points)
+```{r}
+new_data <- w_data%>%
+  filter(`Country.Groups` == "Advanced Economies")
+```
+
+
+
+```{r}
+model3 <- lm(formula= `Investment` ~ `GDP.per.capita` + `Inflation`
+  + `Imports`+ `Exports` + `Unemployment` + `Government.revenue` +
+    `Government.debt` + `Account.balance`, data = new_data)
+summary(model3)
+```
+The p-value for the F-statistic, which is 0.00000000000000022, is less than 0.05. This means that our model is significant. It is a good model, and at least one of the predicted variables significantly impacts our dependent(Investment) variable. In this case, we have multiple linear regression, and we should pay attention to the Adjusted R-squared is 0.4435, which is less than 0.5. This means that 32.17% variation in Investment can be explained by the variation of our independent variables. This also means our model is not good. 
+
+**10.** Refine the multivariate model created in Q9 based on the guidelines below. Compare the initial and updated model, which one is a better fit? (4 points)
+
+- Create correlation matrix for Independent Variables. Look for the pair of variables with strong correlation (multicollinearity). Eliminate one of them.
+- Create correlation matrix between Dependent variable and Independent variables. Eliminate from the analysis those independent variables, who don't have significant correlations with Dependent variable (We don't look at the correlation coefficient, but look at the significance of the coefficient)
+-  Run Regression: Eliminate from the analysis those Independent variables for which the sign of B coefficient differs from the sign of Correlation coefficient 
+from the Matrix calculated above.
+- Eliminate those Independent variables that have insignificant B coefficients 
+
+
+
+```{r}
+n_w_data<- new_data %>%
+  select(`Investment`, `GDP.per.capita`,`Inflation`,
+         `Imports`, `Exports`, `Unemployment`, 
+         `Government.revenue`, `Government.debt`, `Account.balance`)
+```
+
+```{r}
+cor(n_w_data)
+```
+
+
+```{r}
+rcorr(as.matrix(n_w_data))
+```
+
+```{r}
+vif(lm(`Investment` ~ . ,   data = n_w_data))
+```
+
+
+
+```{r}
+summary(lm(`Investment` ~ . -`Exports`, data = n_w_data))
+```
+
+```{r}
+summary(moda<- lm(`Investment` ~ `Imports` + `Unemployment` +
+    `Government.revenue` + `Government.debt` + 
+      `Account.balance`, data = n_w_data))
+```
+
+
+```{r}
+anova(moda, model3)
+```
+
+As the RSS(residual sum squares) of model3 is smaller than the moda model's RSS, we can conclude that the initial model(model3) is a better fit.
+
+**11.** Run a regression for `GDP per capita` as a function of a categorical predictor `Country Groups`. Check the p-value for the test of significance and interpret the slope coefficient. (3 points)
+
+
+```{r}
+aa<- lm(formula = `GDP.per.capita` ~ factor(`Country.Groups`),
+        data = w_data)
+summary(aa)
+```
+
+```{r}
+round(tapply(w_data$`GDP.per.capita`,
+             w_data$`Country.Groups`, mean), 2)
+```
+The P-value for the test of significance is 0.00000000000000022, which is less than 0.05. This means that the relationship is significant. On average, countries with emerging and developing economies have 30051.9 GDP per capita smaller than countries with advanced economies.
+
+**12.** Reorder the levels of the Country Groups so that "Emerging and Developing Economies" is the baseline/reference category. Rerun linear regression with releveled factor and explain why the slope coefficient has changed. (2 points)
+
+```{r}
+w_data$`Country.Groups` <- factor(w_data$`Country.Groups`)
+country_groups <- relevel(w_data$`Country.Groups`, "Emerging and Developing Economies")
+```
+
+```{r}
+model2<- lm(formula = `GDP.per.capita` ~ country_groups, data = w_data)
+summary(model2)
+```
+
+In this case, we define Emerging and Developing Economies as a baseline/reference category, and in the previous model, the baseline was Advanced Economies. In the previous model, we compare the average of Emerging and Developing Economies with Advanced Economies category, and the slope was the difference between their averages. In this case, the average of Advanced Economies category with the average of Emerging and Developing Economies category and the slop is the difference of the average of  Advanced Economies category and the average of Emerging and Developing Economies category. This is because the slopes are different.
+
+
+**13.** With this last assignment we will explore Omitted Variable Bias based on simulated data. (10 points)
+
+**13.1** Create two correlated random variables $x1$ and $x2$. Check the correlation coefficient.
+
+```{r}
+n <- 49
+x1 <- 1 : n
+x2 <- 3 * x1 +  runif(n, -.5, .07)
+cor(x1, x2)
+```
+
+
+
+**13.2** Create $y$ as a function of variables $x1$ and $x2$ and their respective beta coefficients plus random noise term.
+
+```{r}
+y = -2* x1 + 3* x2 + rnorm(n, sd = .02)
+```
+
+**13.3** Run two regression models to predict $y$ 1) only with one of the $x$ variables (omitting the other one); 2) include both $x1$ and $x2$ as independent variables.
+```{r}
+coefficients(lm(formula = y ~ x1))
+```
+
+```{r}
+coefficients(mod2<- lm(y ~ x1 + x2))
+```
+
+
+
+**13.4** Compare the two models. Was the omitted variable bias present in the first model with single predictor? How strong the bias is when the variables are correlated with each other?
+
+The beta1  coefficient of x1 for the restricted model is inflated, because in the restricted model it is  6.9998369, but in the full model the beta1 coefficient of x1 is -1.883903287, and this is the bias. In this case, we have a positive bias.
+
+
+```{r}
+cov(x1, x2)
+```
+
+ 
+**13.5** Think of a solution on how the direction of the omitted variable bias can be changed? Backup your rationale with the R code.
+In this case beta2 is greater than zero and cov(x1, x2) is positive. We have positive bias. For changing the direction of the bias we should make our beta2 negative or make cov(x1, x2) negative.
+
+To change the direction of positive bias, we need to have positive beta2 and negative covariance or have negative beta2 and positive covariance. As in this case, we have positive beta2, and I decided to change the covariance sign. There is a formula cov(x,-y) = - cov(x,y). So I decided to change the sign of x2 for having negative covariance.
+
+
+```{r}
+n <- 49
+x1 <- 1 : n
+x2 <- - 3 * x1 +  runif(n, -.5, .07)
+cor(x1, x2)
+cov(x1, x2)
+```
+
+```{r}
+y = -2* x1 + 3* x2 + rnorm(n, sd = .02)
+```
+
+
+```{r}
+coefficients(lm(formula = y ~ x1))
+```
+
+```{r}
+coefficients(mod2<- lm(y ~ x1 + x2))
+```
+Now we change the direction of our bias, and it becomes negative.
