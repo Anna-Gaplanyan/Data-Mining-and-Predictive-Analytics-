@@ -1,0 +1,172 @@
+---
+author: "Anna Gaplanyan"
+title: "Data Mining HW1: Data Visualization"
+date: "15, February 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+
+options(scipen = 999)
+
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(ggcorrplot)
+library(ggExtra)
+library(ggpubr)
+library(knitr)
+```
+
+Write your solutions and comments in this markdown file and submit it with knitted pdf version to Moodle.  
+
+General notes:
+- Make sure to put titles on the plots and labels on axes.   
+- Interpret the graphs, elaborate on what the graph displays. (If not done you will lose points.) 
+
+## The Dataset
+
+Ranking universities is a difficult, and controversial practice, therefore various principles and authorities exist for measuring universities' performance. 
+For this homework you are asked to explore world's top 100 universities based on the *Quacquarelli Symonds (QS) 2021 World University Ranking data*.
+
+## Data Visualizations and Analysis
+
+**1.** Load the dataset, preview it and describe the structure by 1-2 sentences. (1 point)
+
+```{r}
+university_data<- read_xlsx("University_Data_QS.xlsx")
+str(university_data)
+```
+ The data consists of 100 rows or 100 observations and 22 columns or 22 variables.
+
+**2.** Using dplyr package, transform the dataframe as follows:
+
+- remove columns starting from `Employer Reputation` till `International Faculty`;
+- rename variable `International StudentsQuant` to `Number of International Students`;
+- filter the data by these criteria: include only the observations with the number of `Total Students`>=2000 and exclude "South/Latin America" Region from the analysis. 
+(3 points)
+
+```{r}
+(uni_data<- university_data %>%
+  select(-c(`Employer Reputation` : `International Faculty`)) %>%
+  rename(`Number of International Students` = `International StudentsQuant`) %>%
+  filter(`Total Students`>=2000 & Region != "South/Latin America"))
+```
+This new data set consists of 98 rows and 17 columns. The name of International StudentsQuant is changed to Number of International Students. Also, the South/Latin America region is excluded, and universities with less than 2000 students are excluded.
+
+**3.** Visualize the distribution of the top 100 universities `Academic Reputation` using a histogram. Do not forget to add a title, x and y labels where necessary. Note you can resize the plot's title by specifying a number inside `theme(plot.title = element_text(size = ))`. (2 points)
+
+```{r}
+(plot1<- ggplot(uni_data, aes(x = `Academic Reputation`)) + 
+   geom_histogram() + 
+   labs(x = "Academic Reputation", y = "", 
+    title = "The distribution of the top 100 universities according to their academic reputation") + 
+   theme(plot.title = element_text(size = 10)))
+```
+ This graph shows a histogram of the academic reputation of the top 100 universities. The histogram is skewed left and has a peak to the right side. Most of the values are clustered on the left side of the histogram.
+
+
+**4.** Visualize `Age` distribution of the top 100 universities with a density plot(s). Show `Region` as the 3rd aesthetic (color) using one of the RColorBrewer palettes. Arrange this plot together with the preceding one in a grid. (3 points)
+
+```{r, out.height = "50%"}
+(plot2 <- ggplot(uni_data, aes(`Age`, color = Region)) +
+  geom_density() +
+  scale_colour_brewer(palette = "Dark2")+
+  ggtitle("Age of top 100 universities")+
+  ylab(" "))
+   (ggarrange(plot1, plot2))
+```
+ According to the graph, we can assume that the Asia & Pacific regions have the newest universities and European universities are the oldest
+
+
+**5.** Visualize the number of `Total Students` by `Region` using boxplot(s). Read the boxplots: is the data for the 3 regions normally distributed? If any of the distributions is skewed (not symmetric), add means to the graph to check the direction of the skewness. (2 points)
+```{r}
+(boxplot <- ggplot(uni_data, aes(x = Region, y = `Total Students`)) +
+geom_boxplot() + labs(x = "", y = "Total number of students")+
+  ggtitle("Number of students according to the region of the universities") +
+  theme(plot.title = element_text(size = 7)) +
+stat_summary(fun.y=mean, geom="point", shape=22, size=2, fill = "red"))
+```
+ The boxplot of Asia & Pacific is right-skewed as the mean is higher than the median. This means that most universities' total number is greater than the median, and there is also one outlier. The boxplot of Europe is right-skewed as the mean is higher than the median. According to the boxplot of North America, which is right-skewed, the spread across the median is high. This means that the total number of students of most universities is greater than the median.
+
+
+**6.** Visualize the number of `Total Students` by `Status` of the universities using violin plot(s). Again, arrange this plot in a grid with the above one. (2 points)
+
+```{r}
+(violin_plot <-ggplot(uni_data, aes(x = `Status`, y = `Total Students`)) +
+  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) +
+  ggtitle("Distribution of students according to the status of universities") +
+   stat_summary(fun = mean, geom = "pointrange", width=0.2, color = "red") +
+  theme(plot.title = element_text(size = 7)))
+(ggarrange(boxplot, violin_plot))
+```
+
+ Some public universities have the greatest number of students. However, the number of such universities is small. We can assume that the number of students in public universities is greater than in private universities. 
+
+
+**7.** Visualize the relationship between the number of `International Staff` and the number of `Number of International Students` with a scatterplot; display `Region` with color aesthetic. Also, make the points' shape triangle and add a best fit line (hint: method = "lm").
+Explain the relationship between the variables. Then, calculate the correlation between these two variables to check your observations from the graph.(3 points)
+```{r}
+(ggplot(uni_data, aes(x = `International Staff`, y = `Number of International Students`,
+                      color = `Region`)) + geom_point(shape = 2) + 
+   geom_smooth(method = "lm", se=F) + 
+   labs(x = "International Staff", y = "Number of International Students", 
+    title = "Relationship between International Staff & Number of International Students"))
+```
+
+ The relationship between the International Staff variable and the Number of International Students variable is positive linear for all three regions. This means that when the Number of International Students increases, then the number of International Staff will increase.
+
+```{r}
+(cor(uni_data$`International Staff`, uni_data$`Number of International Students`,
+     use = "pairwise.complete.obs"))
+```
+
+ The correlation is 0.5516939. Even though it is not very large, but based on the correlation coefficient, we can state that it approves the observation.
+
+
+**8.** Calculate and visualize correlations between numeric variables (starting from `Overall Score`) with a correlation matrix using ggcorrplot(). The plot should also include correlation coefficients. 
+Recall that for calculating correlation or creating a correlation matrix, missing values should be excluded/only complete observations should be taken. The relationship between which variables is the strongest? (3 points)
+
+```{r}
+uni_data_mat <- round(cor(uni_data[,8:15], use = "pairwise.complete.obs"),2)
+(ggcorrplot(uni_data_mat, type = 'lower', lab = TRUE, hc.order = TRUE) +
+scale_fill_gradient2(low = "green", high = "red",
+mid = "white", midpoint = 0, limit = c(-1,1), name="Correlation"))
+```
+
+ The relationship between Postgraduate students and  Undergraduate Students variables is the strongest, as the correlation coefficient is -1.
+
+
+**9.** Calculate *average* `Overall Score` by `Country` and visualize the statistic in ascending order using bar charts. Add data labels with the average score to the bars. Rotate the text on the X-axis vertically so that it does not overlap. Which country has the highest Overall score on average? (3 points)
+
+```{r, fig.width= 7}
+(uni_data %>%
+  group_by(Country)%>%
+  summarise(average = round(mean(`Overall Score`, na.rm = TRUE),2)) %>%
+  ggplot(aes(x = reorder(`Country`, average), y = average, label = average)) +
+  geom_bar(stat = "identity") +
+  geom_label()+
+  labs(x = "", y = "Average score of each country", title ="Average overall score of each country") +
+  theme(axis.text.x=element_text(angle=90, hjust=1)))
+```
+
+ According to the graph, we can state that Singapore has the highest Overall score on average, which is 90.7.
+
+
+**10.** Visualize Top-10 universities by the the `Overall Score`. Add data labels with the score to the bars. Facet the Top-10 universities by Region. (3 points)
+
+```{r}
+universities_overall_score <- uni_data[order(uni_data$`Overall Score`), ]
+top_10_universities <- tail(universities_overall_score, 10)
+  (ggplot(top_10_universities, aes(x = reorder(`University Name`, `Overall Score`),
+      y = `Overall Score`)) +
+      geom_bar(stat = "identity") +
+   geom_label(label = top_10_universities$`Overall Score`) +
+  facet_wrap(~`Region`) +
+    labs(x = " ", y = "Overall Score", title = "Overall Score of Top-10 universities") +
+      theme(axis.text.x=element_text(angle=40, hjust=1)))
+
+```
+ According to the graph, we can state that European universities' overall scores are almost equal to North American universities' overall scores. In Europe, the highest overall score has the University of Oxford, 96.7, and in North America, the Massachusetts Institute of Technology has the highest overall score, which is 100.
+
