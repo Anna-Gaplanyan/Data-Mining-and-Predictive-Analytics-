@@ -1,0 +1,280 @@
+---
+title: "Data Mining HW3: Logistic Regression"
+author: "Anna Gaplanyan"
+date: "01, March, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+options(scipen = 999)
+
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(ROCR)
+library(pROC)
+library(knitr)
+```
+
+Write your solutions and comments in this markdown file and submit it with knitted pdf version to Moodle.  
+
+General notes:
+- Make sure to put titles on the plots and labels on axes.   
+- Interpret the graphs, elaborate on what the graph displays. (If not done you will lose points.)
+- Pay attention to orthography, there is a spell check in R studio you can use.
+
+
+*The Dataset*
+
+For this homework assignment we will use nationwide household survey data named Caucasus Barometer and conducted by CRRC-Armenia. The data gathering initiative runs annually across the three South Caucasus countries to facilitate cross-comparison of regional social and economic dynamics. 
+
+**1.** Load the dataset and preview it.(3 points)
+```{r}
+data<- read_xlsx("Caucasus-Barometer-2019.xlsx")
+```
+
+```{r}
+str(data)
+```
+
+The data consists of 584 variables and 1491 observations.
+
+The dependent/outcome variable of interest is `EMIGRAT`. It corresponds to the following question in the survey: "If you had a chance, would you leave forever to live somewhere else?". Thus, we will be predicting the willingness to migrate from Armenia. Note: the dataset is for 2019, and the numbers are likely to be different in light of recent events.
+
+*Filter the dataset to exclude missing values based on NA values of the dependent variable `EMIGRAT.*
+Hint: [!is.na(data$EMIGRAT),] index can be applied to the dataset. Note: The is.na() function works only if you want to omit by one column. The complete.cases() solution works for any amount of columns.
+
+
+```{r}
+data1<- data[complete.cases(data$EMIGRAT), ]
+```
+
+Don't forget to convert the binary variables and other categorical variables used in regression models to factors. Also, sometimes it's more handy to assign the variable to an object rather than refer directly to the column within the data set every time. 
+
+
+
+**1.1** Use the table() command to check the binary outcome: frequencies of people willing to emigrate vs. those who aren't willing to leave the country.
+
+```{r}
+emig<- factor(data$EMIGRAT)
+```
+
+
+```{r}
+(tab<-table(emig))
+```
+
+Next, apply the “prop.table” command to see the percentages of the categories (round to 2 decimals). (2 points)
+
+```{r}
+round(100*prop.table(tab),digits=2)
+```
+There is a rule that the class whose proportion would be higher would be the class assigned to everyone else. In this particular case, we can state that nobody will emigrate with 77.95% accuracy.
+
+
+**2.** Let's start with fitting the simplest version of the logistic regression model - the one with no predictors or only intercept model. Recall that it has the assumption that everyone has the same odds of having the outcome (emigration in our example). Interpret the intercept's coefficient on the *odds scale*. (5 points)
+
+
+
+```{r}
+model_simple <- glm(as.factor(data1$EMIGRAT)~1, data=data1, family="binomial")
+summary(model_simple)
+```
+
+
+```{r}
+exp(coef(model_simple))
+```
+We have no additional information about the case in only the intercept model, so we fit the model as it is. Intercept's coefficient on the odds scale represents how likely it is that everyone will emigrate compared to the fact that everyone will not emigrate. The odds of emigration is 0.2829525, and that is the same for each person. 
+
+**3.** Simple Logistic Regression model
+
+More useful than the null model above is to see how the willingness to emigrate depends on one or more predictors.
+Run a logistic regression with the continuous variable age (`RESPAGE` in the dataset) as the independent variable (we continue predicting emigration). Is age a statistically significant predictor? What are the *odds* of a 22-year old person to leave the country compared with a 21-year old? (5 points)
+
+
+```{r}
+model_age<- glm(as.factor(data1$EMIGRAT)~`RESPAGE`, data=data1, family="binomial")
+summary(model_age)
+```
+Age is a statistically significant predictor (the p-value extremely small).
+
+```{r}
+coef(model_age)
+```
+
+```{r}
+z <- -0.03792307 * 22
+exp(z)/(1+exp(z))
+```
+
+
+```{r}
+k <- -0.03792307 * 21
+exp(k)/(1+exp(k))
+```
+
+
+
+```{r}
+a22<- 0.302735/(1-0.302735)
+a22
+```
+```{r}
+a21<- 0.3107994/ (1-0.3107994)
+a21
+```
+
+```{r}
+0.434175/ 0.4509564
+```
+
+
+```{r}
+exp(coef(model_age))
+```
+The odds ratio is less than one by 0.037213. This means that by adding RESPAGE by one unit, the odds of emigration will decrease by 3.7213 percent. 
+
+**4.** Multiple Logistic Regression model (10 points)
+
+Imagine that you just read in an article that the following factors are considered to be predictors of emigration and decided to test on your dataset:
+
+- age (`RESPAGE` in the dataset)
+- gender (`RESPSEX`)
+- employment status (`EMPLSIT`)
+- having close relative abroad (`CLRLABR`)
+
+Before building a multiple logistic regression model, divide the data into training and test sets (use 80/20 proportion). Fit the model above to the *training set*.
+Which of the variables proved to be significant? Interpret the *significant coefficients*. 
+
+```{r}
+data1$EMIGRAT<- as.factor(data1$EMIGRAT)
+```
+
+```{r}
+data1$`RESPSEX`<- as.factor(data1$`RESPSEX`)
+```
+
+```{r}
+data1$`EMPLSIT`<- as.factor(data1$`EMPLSIT`)
+```
+
+```{r}
+data1$`CLRLABR`<- as.factor(data1$`CLRLABR`)
+```
+
+
+
+```{r}
+set.seed(1)
+trainIndex <- createDataPartition(data1$EMIGRAT, p = .8, list = FALSE)
+Train <- data1[trainIndex,]
+Test <- data1[-trainIndex,]
+```
+
+
+```{r}
+levels(data1$EMPLSIT)
+```
+
+
+```{r}
+mult_model<- glm(factor(EMIGRAT)~ RESPAGE+ RESPSEX+ EMPLSIT+ CLRLABR, data = Train, family = "binomial")
+summary(mult_model)
+```
+According to the model results, it can be stated that variables RESPAGE, EMPLSITHousewife and not working, EMPLSITUnemployed are statistically significant. Moreover, RESPAGE is significantly and negatively associated with the risk of leaving the country. By adding RESPAGE by one unit, the log odds of emigration will decrease by  -0.039148. The log odds for emigration for EMPLSITHousewife and not working is -0.447934 less than the log odds for EMPLSITEmployee as EMPLSITEmployee is a base category. The log odds for emigration for EMPLSITUnemployed is  0.636289 more than the log odds for emigration for EMPLSITEmployee.
+
+
+**5.** Measuring predictive power of the model.(15 points)
+
+Since our goal is to build a model that will predict the dependent variable (emigration) based on the independent variables, let's evaluate the model's predictive power based on a Confusion Matrix. And in order to better understand the obscurities of the Confusion Matrix you need to firstly build it by hand.
+
+To generate a confusion matrix, follow the steps below:
+
+1. Use the predict() function to make predictions on Testing set and obtain the probabilities. Cut the predicted probabilities with a threshold 0.5 to get class assignments. 
+2. Make a contingency table, using the table() function in R.
+3. Draw the confusion matrix and calculate the measures of accuracy by hand (Overall accuracy, Sensitivity, Specificity, Positive Predictive Value, Negative Predictive Value). Load the image or screenshot to this .rmd file (hint: you may use include_graphics() function from knitr package).
+
+```{r}
+probab <- predict(mult_model, newdata=Test, type="response")
+probab[1:20]
+```
+
+
+```{r}
+pred_class <- factor(ifelse(probab>0.5, "Yes", "No"))
+```
+
+
+
+```{r}
+pred_class <- relevel(pred_class, "Yes") 
+emigration <- relevel(Test$EMIGRAT, "Yes")
+```
+
+
+
+```{r}
+addmargins(table(pred_class, emigration))
+```
+
+
+```{r, echo = F, out.width='80%', out.height='80%'}
+include_graphics('Screenshot_hmw3.png')
+```
+
+**6.** Build the same Confusion matrix in R using caret package by providing the predicted outcomes and the actual outcomes as arguments. Make sure that you get the same results as you did manually above. Additionally, tests the hypothesis that the Accuracy is greater than No Information rate (P-Value [Acc > NIR]).(5 points)
+
+```{r}
+confusionMatrix(data=pred_class, reference=Test$EMIGRAT,
+positive="Yes")
+```
+TThe comparison of the confusion matrix results drawn by hand and by R shows that the results are the same, and there is no difference between them. As the p-value of the null hypothesis, which states that ACC > NIR is greater than 0.05, it can be stated that the null hypothesis is rejected, and there is no statistically significant difference between ACC and NIR, and ACC is not greater than NIR.
+
+
+**7.** As you know, the model's accuracy can change if you change the cutoff value. To account for that, We can plot the true positive vs. false positive rate at every possible threshold with the ROC curve. Create a ROC curve using the ROCR package and interpret the plot.(10 points)
+
+Follow the steps below:
+1. Using the prediction() function obtain an object of the class prediction. Provide the predictions of the model and the true values of the test set as arguments to the prediction object. 
+2. Pass the resulting object as an argument to the function performance() and indicate which evaluation metrics should be extracted. 
+3. Finally, the result of this latter function can be used with the function plot() to obtain the ROC curve.
+
+
+```{r}
+predic_object <- prediction(probab, Test$EMIGRAT)
+```
+
+```{r}
+perform <- performance(predic_object, "tpr", "fpr")
+```
+
+```{r}
+plot(perform, main = "ROC Curve", colorize=T)
+```
+As we can see, the ROC curve is close to the diagonal line from the left side and is higher than the diagonal sign. In this case, it can be stated that this model is better than the random guess model, but it cannot be stated that this model is good as the ROC curve is far from the left-hand border.
+
+**8.** Area Under the Curve (AUC) is a very useful statistic as it summarizes the model's performance across all possible classification thresholds and can be used to rank different models within the same dataset. Compute the AUC for the multiple logistic regression built before with the test dataset. Should we use this model or look for another one? (5 points)
+
+```{r}
+ROC1 <- roc(Test$EMIGRAT, probab)
+```
+
+```{r}
+auc(ROC1)
+```
+
+The area under the curve is a single number between 0 and 1. The closer it is to 1, the better is going to be the model. In this case, AUC is  0.6346, which means that there is a 63.46% chance that the model will distinguish between classes. As 0.6346 is close to 0.5 and is not close to 1, we should not use this model and should look for another one.
+
+
+**9.** Lastly, generate a Precision-Recall curve. Is it suitable for the evaluation of this particular model taking into account that we are more interested in predicting positive responses, i.e. those interested to migrate? Explain why. (5 points)
+
+
+```{r}
+perf1 <- performance(predic_object, "prec", "rec")
+plot(perf1, main = "Precision-Recall curve", colorize=T)
+```
+
+We use the Precision-Recall curve when we have a class imbalance, and detecting a rare positive case is much more important than detecting a negative case. In this case, we have a class imbalance. 2019 was a year after the velvet revolution, and more people would not want to leave Armenia. Therefore, positive responses, i.e., those interested in emigrating, were rare positive cases. Hence, a Precision-Recall curve is suitable for the evaluation of this particular model.
